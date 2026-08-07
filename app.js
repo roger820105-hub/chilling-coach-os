@@ -1,16 +1,45 @@
 
-// ===== LINE MINI App / LIFF identity test =====
-// Developing LIFF ID for Chilling Coach OS
+// ===== LINE MINI App / V3 secure account bootstrap =====
 const LIFF_ID = "2011008227-7rnEFNrI";
 
-async function initLineIdentity() {
+function setRoleUI(roles) {
+  const coachBtn = document.getElementById("coachBtn");
+  const managerBtn = document.getElementById("managerBtn");
+  const roleSwitch = document.getElementById("roleSwitch");
+  const coachView = document.getElementById("coachView");
+  const managerView = document.getElementById("managerView");
+
+  const isCoach = roles.includes("coach");
+  const isManager = roles.includes("manager") || roles.includes("admin");
+
+  roleSwitch.classList.add("hidden");
+
+  if (isCoach && isManager) {
+    roleSwitch.classList.remove("hidden");
+    coachView.classList.remove("hidden");
+    managerView.classList.add("hidden");
+    coachBtn.classList.add("active");
+    managerBtn.classList.remove("active");
+  } else if (isManager) {
+    coachView.classList.add("hidden");
+    managerView.classList.remove("hidden");
+  } else {
+    coachView.classList.remove("hidden");
+    managerView.classList.add("hidden");
+  }
+}
+
+async function initLineAccount() {
   const greeting = document.getElementById("lineGreeting");
   const status = document.getElementById("lineStatus");
+  const accountState = document.getElementById("accountState");
 
   if (typeof liff === "undefined") {
     greeting.textContent = "LINE SDK 載入失敗";
     status.textContent = "LINE SDK 未載入";
     status.className = "line-status error";
+    accountState.textContent = "無法確認系統帳號";
+    accountState.className = "account-state error";
     return;
   }
 
@@ -20,45 +49,68 @@ async function initLineIdentity() {
       withLoginOnExternalBrowser: true
     });
 
-    // In the LIFF browser, login is normally handled automatically.
-    // In an external browser, withLoginOnExternalBrowser will initiate login.
     if (!liff.isLoggedIn()) {
-      greeting.textContent = "等待 LINE 登入…";
       status.textContent = "尚未登入 LINE";
       status.className = "line-status warn";
+      accountState.textContent = "等待 LINE 登入…";
+      accountState.className = "account-state warn";
       return;
     }
 
     const profile = await liff.getProfile();
-
-    // Display only in the client UI for this test.
     greeting.textContent = `早安，${profile.displayName}`;
     status.textContent = liff.isInClient()
       ? "LINE 身分已連線"
       : "LINE 身分已連線（外部瀏覽器）";
     status.className = "line-status ok";
 
-    // Keep identity locally in memory only; do not send profile data to a server.
-    window.chillingLineIdentity = {
-      displayName: profile.displayName,
-      userId: profile.userId
-    };
+    const accessToken = liff.getAccessToken();
+    if (!accessToken) {
+      throw new Error("Unable to obtain LINE access token");
+    }
 
-    console.log("LIFF initialized:", {
-      isInClient: liff.isInClient(),
-      os: liff.getOS(),
-      displayName: profile.displayName
+    const response = await fetch("/api/me", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ accessToken })
     });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload.error || "Account bootstrap failed");
+    }
+
+    window.chillingUser = payload.user;
+
+    const roles = payload.roles || [];
+    setRoleUI(roles);
+
+    if (payload.created) {
+      accountState.textContent = "系統帳號已建立｜目前尚未指派角色";
+      accountState.className = "account-state warn";
+    } else if (roles.length === 0) {
+      accountState.textContent = "帳號已存在｜尚未指派角色";
+      accountState.className = "account-state warn";
+    } else {
+      accountState.textContent = `系統角色：${roles.join(" + ")}`;
+      accountState.className = "account-state ok";
+    }
+
   } catch (error) {
-    console.error("LIFF init error:", error);
-    greeting.textContent = "LINE 身分辨識失敗（Demo 仍可使用）";
-    status.textContent = "LINE 連線失敗";
-    status.className = "line-status error";
+    console.error("LINE / account init error:", error);
+    accountState.textContent = "系統帳號連線失敗";
+    accountState.className = "account-state error";
   }
 }
 
-document.addEventListener("DOMContentLoaded", initLineIdentity);
-// ===== End LINE identity test =====
+document.addEventListener("DOMContentLoaded", initLineAccount);
+// ===== End V3 secure account bootstrap =====
+
+
+
 
 
 const students = [

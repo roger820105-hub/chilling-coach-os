@@ -14,7 +14,7 @@
         <h1>Chilling Coach OS</h1>
         <div class="line-status" id="lineStatus">正在連線 LINE…</div>
       </div>
-      <div class="role-switch">
+      <div class="role-switch hidden" id="roleSwitch">
         <button id="coachBtn" class="active">教練端</button>
         <button id="managerBtn">主管端</button>
       </div>
@@ -25,6 +25,7 @@
         <div class="hero">
           <div>
             <div class="muted" id="lineGreeting">LINE 身分讀取中…</div>
+            <div id="accountState" class="account-state">正在確認系統帳號…</div>
             <h2>今天先處理最需要注意的學生</h2>
           </div>
           <button class="primary" id="addStudent">＋ 新增學員</button>

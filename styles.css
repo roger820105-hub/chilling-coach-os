@@ -33,3 +33,12 @@
 .line-status.ok{background:#e8f1eb;color:#2b6646}
 .line-status.warn{background:#fff4d8;color:#805d14}
 .line-status.error{background:#f9e8e6;color:#903c35}
+
+.account-state{
+  margin-top:8px;
+  font-size:12px;
+  color:var(--muted);
+}
+.account-state.ok{color:#2b6646;font-weight:700}
+.account-state.warn{color:#805d14;font-weight:700}
+.account-state.error{color:#903c35;font-weight:700}

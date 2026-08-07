@@ -108,3 +108,48 @@ renewal_probability 第一版先使用規則分數：
 - 本版只在瀏覽器記憶體中使用 `liff.getProfile()` 的結果。
 - 正式接後端時，不會把 `getProfile()` 取得的 userId / displayName 直接當可信任身分送給伺服器。
 - 正式版會把 LINE ID token 或 access token 傳給後端，由後端向 LINE 驗證後再對應資料庫權限。
+
+
+# V3 — Secure LINE → Supabase account bootstrap
+
+## Architecture
+LINE MINI App
+→ LIFF obtains LINE access token
+→ POST /api/me
+→ Vercel server validates token with LINE `/v2/profile`
+→ server uses Supabase Secret key
+→ creates/finds `users`
+→ returns `user_roles`
+
+The browser never receives `SUPABASE_SECRET_KEY`.
+
+## Required Vercel environment variables
+
+Set these in Vercel → Project → Settings → Environment Variables:
+
+SUPABASE_URL
+https://ctlpugehkcmqeabocksq.supabase.co
+
+SUPABASE_SECRET_KEY
+Use the Supabase Secret key from Project Settings → API Keys → Secret keys.
+Do NOT place this value in GitHub or frontend files.
+
+## First launch behavior
+The first successful LINE launch creates a row in `users`.
+It does NOT automatically grant coach/manager permissions.
+
+After the first launch, assign roles in SQL Editor using the user's row ID, for example:
+
+insert into public.user_roles (user_id, role)
+select id, 'coach'
+from public.users
+where display_name = 'YOUR_LINE_DISPLAY_NAME'
+on conflict do nothing;
+
+insert into public.user_roles (user_id, role)
+select id, 'manager'
+from public.users
+where display_name = 'YOUR_LINE_DISPLAY_NAME'
+on conflict do nothing;
+
+For production, prefer assigning by users.id rather than display_name.
