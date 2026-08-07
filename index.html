@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Chilling Coach OS</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">LINE Mini App MVP</div>
+        <h1>Chilling Coach OS</h1>
+      </div>
+      <div class="role-switch">
+        <button id="coachBtn" class="active">教練端</button>
+        <button id="managerBtn">主管端</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="coachView">
+        <div class="hero">
+          <div>
+            <div class="muted">早安，Roger 教練</div>
+            <h2>今天先處理最需要注意的學生</h2>
+          </div>
+          <button class="primary" id="addStudent">＋ 新增學員</button>
+        </div>
+
+        <div class="kpis four">
+          <div class="card metric"><span>手上學員</span><strong id="studentCount">18</strong><small>人</small></div>
+          <div class="card metric"><span>本月已上課</span><strong id="monthSessions">74</strong><small>堂</small></div>
+          <div class="card metric"><span>30天內預計續約</span><strong>5</strong><small>人</small></div>
+          <div class="card metric risk"><span>需關注學員</span><strong>3</strong><small>人</small></div>
+        </div>
+
+        <div class="section-head">
+          <div>
+            <div class="eyebrow">PRIORITY</div>
+            <h3>即將續約 / 流失風險</h3>
+          </div>
+          <select id="studentFilter">
+            <option value="all">全部</option>
+            <option value="renewal">即將續約</option>
+            <option value="risk">高風險</option>
+            <option value="stable">穩定</option>
+          </select>
+        </div>
+
+        <div id="studentList" class="student-grid"></div>
+
+        <div class="section-head">
+          <div>
+            <div class="eyebrow">TODAY</div>
+            <h3>今日上課</h3>
+          </div>
+        </div>
+        <div class="card today">
+          <div class="session-row"><div><b>10:00 王小明</b><span>下肢力量｜第 19 堂</span></div><button onclick="completeSession('王小明')">完成課程</button></div>
+          <div class="session-row"><div><b>14:00 陳小華</b><span>上肢推拉｜第 8 堂</span></div><button onclick="completeSession('陳小華')">完成課程</button></div>
+          <div class="session-row"><div><b>16:30 林怡君</b><span>體態調整｜第 13 堂</span></div><button onclick="completeSession('林怡君')">完成課程</button></div>
+        </div>
+      </section>
+
+      <section id="managerView" class="hidden">
+        <div class="hero">
+          <div>
+            <div class="muted">主管營運中心</div>
+            <h2>教練續約與下月營收預測</h2>
+          </div>
+          <button class="primary" id="exportBtn">匯出月報</button>
+        </div>
+
+        <div class="kpis four">
+          <div class="card metric"><span>PT 學員</span><strong>143</strong><small>人</small></div>
+          <div class="card metric"><span>進入續約週期</span><strong>38</strong><small>人</small></div>
+          <div class="card metric"><span>預估續約率</span><strong>71%</strong><small>+4.2%</small></div>
+          <div class="card metric"><span>預估續約營收</span><strong>1.42M</strong><small>NTD</small></div>
+        </div>
+
+        <div class="dashboard-grid">
+          <div class="card">
+            <div class="section-head compact"><div><div class="eyebrow">FORECAST</div><h3>教練續約預測</h3></div></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>教練</th><th>學員</th><th>本月續約率</th><th>下月到期</th><th>預估續約</th><th>預估營收</th></tr></thead>
+                <tbody>
+                  <tr><td>Roger</td><td>18</td><td><span class="pill good">78%</span></td><td>5</td><td>4.0</td><td>200K</td></tr>
+                  <tr><td>Leo</td><td>24</td><td><span class="pill mid">72%</span></td><td>8</td><td>5.8</td><td>290K</td></tr>
+                  <tr><td>Mia</td><td>18</td><td><span class="pill warn">61%</span></td><td>5</td><td>3.1</td><td>155K</td></tr>
+                  <tr><td>Ken</td><td>27</td><td><span class="pill good">83%</span></td><td>10</td><td>8.3</td><td>415K</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card insight">
+            <div class="eyebrow">AI INSIGHT</div>
+            <h3>本月應優先處理</h3>
+            <p><b>Mia 教練續約率偏低</b>，但問題不完全來自成交能力。</p>
+            <p>目前有 4 位學員近 4 週上課頻率下降超過 30%，預計會把續約時點延後。</p>
+            <div class="callout">建議：先追蹤出席與排課狀況，再判斷是否需要銷售輔導。</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-head compact"><div><div class="eyebrow">OPERATIONS</div><h3>營運風險雷達</h3></div></div>
+          <div class="risk-list">
+            <div><span class="dot red"></span><b>6 位</b> 高流失風險學員</div>
+            <div><span class="dot amber"></span><b>11 位</b> 14 天內應開始續約接觸</div>
+            <div><span class="dot green"></span><b>21 位</b> 高續約機率學員</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav">
+      <button class="active">總覽</button><button>學員</button><button>課程</button><button>數據</button>
+    </nav>
+  </div>
+
+  <dialog id="studentDialog">
+    <form method="dialog" class="dialog-card">
+      <button class="x" value="cancel">×</button>
+      <div class="eyebrow">STUDENT PROFILE</div>
+      <h2 id="dialogName">王小明</h2>
+      <div id="dialogBody"></div>
+      <button class="primary full" value="cancel">關閉</button>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
