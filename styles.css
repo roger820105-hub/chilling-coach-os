@@ -42,3 +42,65 @@
 .account-state.ok{color:#2b6646;font-weight:700}
 .account-state.warn{color:#805d14;font-weight:700}
 .account-state.error{color:#903c35;font-weight:700}
+
+.load-state{
+  padding:20px 4px;
+  color:var(--muted);
+  font-size:14px;
+}
+.load-state.error{color:#903c35}
+.load-state.empty{
+  background:#fff;
+  border:1px dashed var(--line);
+  border-radius:16px;
+  padding:22px;
+}
+.field-label{
+  display:block;
+  margin:14px 0 6px;
+  font-size:13px;
+  font-weight:700;
+  color:#4d554f;
+}
+.text-input{
+  width:100%;
+  border:1px solid var(--line);
+  background:#fff;
+  border-radius:12px;
+  padding:12px 13px;
+  font:inherit;
+  color:var(--text);
+  outline:none;
+}
+.text-input:focus{
+  border-color:#9aac9f;
+  box-shadow:0 0 0 3px #183c2d12;
+}
+.textarea-input{
+  min-height:96px;
+  resize:vertical;
+}
+.form-message{
+  min-height:20px;
+  margin:12px 0;
+  font-size:13px;
+  color:var(--muted);
+}
+.form-message.error{color:#903c35}
+.form-message.ok{color:#2b6646}
+.student-card .live-badge{
+  display:inline-flex;
+  margin-top:14px;
+  font-size:11px;
+  font-weight:800;
+  color:#2b6646;
+  background:#e8f1eb;
+  padding:5px 8px;
+  border-radius:999px;
+}
+.student-card .note-preview{
+  margin-top:12px;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.5;
+}

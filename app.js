@@ -65,6 +65,7 @@ async function initLineAccount() {
     status.className = "line-status ok";
 
     const accessToken = liff.getAccessToken();
+    window.chillingLineAccessToken = accessToken;
     if (!accessToken) {
       throw new Error("Unable to obtain LINE access token");
     }
@@ -87,6 +88,10 @@ async function initLineAccount() {
 
     const roles = payload.roles || [];
     setRoleUI(roles);
+
+    if (roles.includes("coach")) {
+      await loadStudents();
+    }
 
     if (payload.created) {
       accountState.textContent = "系統帳號已建立｜目前尚未指派角色";
@@ -113,34 +118,112 @@ document.addEventListener("DOMContentLoaded", initLineAccount);
 
 
 
-const students = [
- {name:"王小明",remaining:6,total:24,freq:1.8,last:"8/6",eta:"9/2",renew:"8/25–9/5",status:"renewal",label:"即將續約",prob:78},
- {name:"陳小華",remaining:15,total:24,freq:0.8,last:"7/26",eta:"12/18",renew:"需先恢復頻率",status:"risk",label:"高風險",prob:39},
- {name:"林怡君",remaining:11,total:24,freq:2.0,last:"8/5",eta:"9/15",renew:"9/5–9/15",status:"stable",label:"穩定",prob:84},
- {name:"黃志偉",remaining:4,total:12,freq:1.2,last:"8/3",eta:"8/31",renew:"8/20–8/31",status:"renewal",label:"即將續約",prob:69},
- {name:"張雅婷",remaining:20,total:36,freq:2.3,last:"8/6",eta:"10/10",renew:"9/28–10/10",status:"stable",label:"穩定",prob:88},
- {name:"李承翰",remaining:9,total:24,freq:0.6,last:"7/22",eta:"長期延後",renew:"需立即關懷",status:"risk",label:"高風險",prob:31}
-];
 
+let students = [];
 const list = document.getElementById("studentList");
-function render(filter="all"){
- list.innerHTML = "";
- students.filter(s=>filter==="all"||s.status===filter).forEach(s=>{
-   const el=document.createElement("div");
-   el.className="card student-card";
-   const used=s.total-s.remaining, pct=Math.round(used/s.total*100);
-   el.innerHTML=`<div class="student-top"><h4>${s.name}</h4><span class="status-${s.status}">${s.label}</span></div>
-   <div class="student-meta">
-     <div><small>剩餘堂數</small><b>${s.remaining} / ${s.total}</b></div>
-     <div><small>平均頻率</small><b>${s.freq} 堂/週</b></div>
-     <div><small>預估完課</small><b>${s.eta}</b></div>
-     <div><small>續約機率</small><b>${s.prob}%</b></div>
-   </div><div class="progress"><i style="width:${pct}%"></i></div>`;
-   el.onclick=()=>openStudent(s);
-   list.appendChild(el);
- });
+const studentLoadState = document.getElementById("studentLoadState");
+
+function formatDateTW(value){
+  if(!value) return "—";
+  try{
+    const d = new Date(value);
+    if(Number.isNaN(d.getTime())) return value;
+    return `${d.getMonth()+1}/${d.getDate()}`;
+  }catch{
+    return value;
+  }
 }
-render();
+
+function render(filter="all"){
+  list.innerHTML = "";
+
+  let filtered = students;
+  if(filter !== "all"){
+    // V4 先保留篩選器 UI；續約風險會在後續版本由真實消課資料計算
+    filtered = students.filter(s => s.statusBucket === filter);
+  }
+
+  if(filtered.length === 0){
+    studentLoadState.classList.add("empty");
+    studentLoadState.textContent = students.length === 0
+      ? "目前還沒有學員。按右上角「＋新增學員」建立第一位。"
+      : "目前沒有符合這個篩選條件的學員。";
+    studentLoadState.style.display = "block";
+    return;
+  }
+
+  studentLoadState.style.display = "none";
+  studentLoadState.classList.remove("empty","error");
+
+  filtered.forEach(s=>{
+    const el=document.createElement("div");
+    el.className="card student-card";
+
+    const statusLabel = s.status === "paused" ? "暫停" : (s.status === "inactive" ? "停用" : "進行中");
+    const statusClass = s.status === "active" ? "status-stable" : "status-risk";
+
+    el.innerHTML=`
+      <div class="student-top">
+        <h4>${escapeHtml(s.name)}</h4>
+        <span class="${statusClass}">${statusLabel}</span>
+      </div>
+      <div class="student-meta">
+        <div><small>建立日期</small><b>${formatDateTW(s.joined_at)}</b></div>
+        <div><small>目前狀態</small><b>${statusLabel}</b></div>
+      </div>
+      ${s.note ? `<div class="note-preview">${escapeHtml(s.note)}</div>` : ""}
+      <div class="live-badge">Supabase 即時資料</div>
+    `;
+    el.onclick=()=>openStudent(s);
+    list.appendChild(el);
+  });
+}
+
+function escapeHtml(value){
+  return String(value ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+async function loadStudents(){
+  if(!window.chillingLineAccessToken) return;
+
+  studentLoadState.style.display = "block";
+  studentLoadState.classList.remove("error","empty");
+  studentLoadState.textContent = "正在載入你的學員…";
+
+  try{
+    const response = await fetch("/api/students",{
+      method:"GET",
+      headers:{
+        "Authorization":`Bearer ${window.chillingLineAccessToken}`
+      }
+    });
+
+    const payload = await response.json();
+
+    if(!response.ok){
+      throw new Error(payload.error || "Unable to load students");
+    }
+
+    students = (payload.students || []).map(s => ({
+      ...s,
+      statusBucket: "stable"
+    }));
+
+    document.getElementById("studentCount").textContent = students.length;
+    render(document.getElementById("studentFilter").value);
+  }catch(error){
+    console.error(error);
+    studentLoadState.style.display = "block";
+    studentLoadState.classList.add("error");
+    studentLoadState.textContent = "學員資料載入失敗，請重新開啟 MINI App 再試一次。";
+  }
+}
+
 
 document.getElementById("studentFilter").onchange=e=>render(e.target.value);
 const coachView=document.getElementById("coachView"), managerView=document.getElementById("managerView");
@@ -151,25 +234,93 @@ function openStudent(s){
  document.getElementById("dialogName").textContent=s.name;
  document.getElementById("dialogBody").innerHTML=`
  <div class="detail-grid">
-  <div><small>剩餘堂數</small><b>${s.remaining} 堂</b></div>
-  <div><small>平均頻率</small><b>${s.freq} 堂/週</b></div>
-  <div><small>最近上課</small><b>${s.last}</b></div>
-  <div><small>預估續約</small><b>${s.renew}</b></div>
+  <div><small>狀態</small><b>${s.status === "active" ? "進行中" : (s.status === "paused" ? "暫停" : "停用")}</b></div>
+  <div><small>加入日期</small><b>${formatDateTW(s.joined_at)}</b></div>
+  <div><small>電話</small><b>${s.phone ? escapeHtml(s.phone) : "—"}</b></div>
+  <div><small>教練關係</small><b>主要教練</b></div>
  </div>
- <div class="eyebrow">最近課表</div>
+ <div class="eyebrow">備註</div>
  <div class="timeline">
-  <p><b>8/6</b> 下肢力量｜深蹲、RDL、弓箭步</p>
-  <p><b>8/2</b> 上肢拉｜划船、下拉、核心</p>
-  <p><b>7/29</b> 全身循環｜動作品質＋心肺</p>
- </div>`;
+  <p>${s.note ? escapeHtml(s.note) : "尚無備註"}</p>
+ </div>
+ <div class="callout">V4 已完成真實學員資料。剩餘堂數、上課紀錄與續約預測會在下一階段接上 packages / sessions。</div>`;
  document.getElementById("studentDialog").showModal();
 }
 
 window.completeSession=function(name){
  const s=students.find(x=>x.name===name);
- if(s && s.remaining>0){s.remaining--; s.last="今天"; render(document.getElementById("studentFilter").value);}
+ if(s && typeof s.remaining==="number" && s.remaining>0){s.remaining--; s.last="今天"; render(document.getElementById("studentFilter").value);}
  alert(`${name} 今日課程已完成，剩餘堂數已自動 -1，預估完課日將重新計算。`);
 }
 
-document.getElementById("addStudent").onclick=()=>alert("MVP 下一步：串接資料庫後，這裡會開啟新增學員表單。");
+
+const addStudentDialog = document.getElementById("addStudentDialog");
+const addStudentMessage = document.getElementById("addStudentMessage");
+const saveStudentBtn = document.getElementById("saveStudentBtn");
+
+document.getElementById("addStudent").onclick=()=>{
+  document.getElementById("newStudentName").value="";
+  document.getElementById("newStudentPhone").value="";
+  document.getElementById("newStudentNote").value="";
+  addStudentMessage.textContent="";
+  addStudentMessage.className="form-message";
+  addStudentDialog.showModal();
+  setTimeout(()=>document.getElementById("newStudentName").focus(),50);
+};
+
+document.getElementById("closeAddStudentDialog").onclick=()=>addStudentDialog.close();
+
+saveStudentBtn.onclick=async()=>{
+  const name=document.getElementById("newStudentName").value.trim();
+  const phone=document.getElementById("newStudentPhone").value.trim();
+  const note=document.getElementById("newStudentNote").value.trim();
+
+  if(!name){
+    addStudentMessage.textContent="請輸入學員姓名。";
+    addStudentMessage.className="form-message error";
+    return;
+  }
+
+  if(!window.chillingLineAccessToken){
+    addStudentMessage.textContent="LINE 身分尚未完成，請重新開啟 MINI App。";
+    addStudentMessage.className="form-message error";
+    return;
+  }
+
+  saveStudentBtn.disabled=true;
+  saveStudentBtn.textContent="建立中…";
+  addStudentMessage.textContent="正在寫入 Supabase…";
+  addStudentMessage.className="form-message";
+
+  try{
+    const response=await fetch("/api/students",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "Authorization":`Bearer ${window.chillingLineAccessToken}`
+      },
+      body:JSON.stringify({name,phone,note})
+    });
+
+    const payload=await response.json();
+
+    if(!response.ok){
+      throw new Error(payload.error || "Create student failed");
+    }
+
+    addStudentMessage.textContent="學員建立成功。";
+    addStudentMessage.className="form-message ok";
+
+    await loadStudents();
+    setTimeout(()=>addStudentDialog.close(),450);
+  }catch(error){
+    console.error(error);
+    addStudentMessage.textContent="建立失敗，請稍後再試。";
+    addStudentMessage.className="form-message error";
+  }finally{
+    saveStudentBtn.disabled=false;
+    saveStudentBtn.textContent="建立學員";
+  }
+};
+
 document.getElementById("exportBtn").onclick=()=>alert("MVP 下一步：可輸出 Excel / PDF 月報，或每日自動推送至主管 LINE。");

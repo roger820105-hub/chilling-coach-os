@@ -32,8 +32,8 @@
         </div>
 
         <div class="kpis four">
-          <div class="card metric"><span>手上學員</span><strong id="studentCount">18</strong><small>人</small></div>
-          <div class="card metric"><span>本月已上課</span><strong id="monthSessions">74</strong><small>堂</small></div>
+          <div class="card metric"><span>手上學員</span><strong id="studentCount">0</strong><small>人</small></div>
+          <div class="card metric"><span>本月已上課</span><strong id="monthSessions">—</strong><small>堂</small></div>
           <div class="card metric"><span>30天內預計續約</span><strong>5</strong><small>人</small></div>
           <div class="card metric risk"><span>需關注學員</span><strong>3</strong><small>人</small></div>
         </div>
@@ -51,6 +51,7 @@
           </select>
         </div>
 
+        <div id="studentLoadState" class="load-state">正在載入你的學員…</div>
         <div id="studentList" class="student-grid"></div>
 
         <div class="section-head">
@@ -122,6 +123,28 @@
       <button class="active">總覽</button><button>學員</button><button>課程</button><button>數據</button>
     </nav>
   </div>
+
+
+  <dialog id="addStudentDialog">
+    <div class="dialog-card">
+      <button class="x" id="closeAddStudentDialog" type="button">×</button>
+      <div class="eyebrow">NEW STUDENT</div>
+      <h2>新增學員</h2>
+
+      <label class="field-label" for="newStudentName">學員姓名 *</label>
+      <input id="newStudentName" class="text-input" type="text" maxlength="50" placeholder="例如：王小明" />
+
+      <label class="field-label" for="newStudentPhone">電話</label>
+      <input id="newStudentPhone" class="text-input" type="tel" maxlength="30" placeholder="選填" />
+
+      <label class="field-label" for="newStudentNote">備註</label>
+      <textarea id="newStudentNote" class="text-input textarea-input" maxlength="500" placeholder="選填，例如：初次體驗、訓練目標等"></textarea>
+
+      <div id="addStudentMessage" class="form-message"></div>
+
+      <button class="primary full" id="saveStudentBtn" type="button">建立學員</button>
+    </div>
+  </dialog>
 
   <dialog id="studentDialog">
     <form method="dialog" class="dialog-card">

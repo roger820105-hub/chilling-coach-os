@@ -153,3 +153,29 @@ where display_name = 'YOUR_LINE_DISPLAY_NAME'
 on conflict do nothing;
 
 For production, prefer assigning by users.id rather than display_name.
+
+
+# V4 — Real student creation + live student list
+
+## What changed
+- `+ 新增學員` now opens a real form.
+- POST `/api/students` creates a row in `students`.
+- The same request automatically creates the `coach_students` relationship for the logged-in coach.
+- GET `/api/students` returns only students currently assigned to the logged-in coach.
+- LINE access token is validated server-side before any data operation.
+- Coach role is required for both read and create operations.
+- The frontend no longer uses the demo student cards for the main student list.
+
+## Deploy
+Upload/replace:
+- index.html
+- styles.css
+- app.js
+- README.md
+- vercel.json
+- api/students.js
+
+Keep:
+- api/me.js
+
+No new environment variables are required.
