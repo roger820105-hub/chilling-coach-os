@@ -12,6 +12,7 @@
       <div>
         <div class="eyebrow">LINE Mini App MVP</div>
         <h1>Chilling Coach OS</h1>
+        <div class="line-status" id="lineStatus">正在連線 LINE…</div>
       </div>
       <div class="role-switch">
         <button id="coachBtn" class="active">教練端</button>
@@ -23,7 +24,7 @@
       <section id="coachView">
         <div class="hero">
           <div>
-            <div class="muted">早安，Roger 教練</div>
+            <div class="muted" id="lineGreeting">LINE 身分讀取中…</div>
             <h2>今天先處理最需要注意的學生</h2>
           </div>
           <button class="primary" id="addStudent">＋ 新增學員</button>
@@ -131,6 +132,7 @@
     </form>
   </dialog>
 
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

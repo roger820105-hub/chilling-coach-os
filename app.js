@@ -1,4 +1,66 @@
 
+// ===== LINE MINI App / LIFF identity test =====
+// Developing LIFF ID for Chilling Coach OS
+const LIFF_ID = "2011008227-7rnEFNrI";
+
+async function initLineIdentity() {
+  const greeting = document.getElementById("lineGreeting");
+  const status = document.getElementById("lineStatus");
+
+  if (typeof liff === "undefined") {
+    greeting.textContent = "LINE SDK 載入失敗";
+    status.textContent = "LINE SDK 未載入";
+    status.className = "line-status error";
+    return;
+  }
+
+  try {
+    await liff.init({
+      liffId: LIFF_ID,
+      withLoginOnExternalBrowser: true
+    });
+
+    // In the LIFF browser, login is normally handled automatically.
+    // In an external browser, withLoginOnExternalBrowser will initiate login.
+    if (!liff.isLoggedIn()) {
+      greeting.textContent = "等待 LINE 登入…";
+      status.textContent = "尚未登入 LINE";
+      status.className = "line-status warn";
+      return;
+    }
+
+    const profile = await liff.getProfile();
+
+    // Display only in the client UI for this test.
+    greeting.textContent = `早安，${profile.displayName}`;
+    status.textContent = liff.isInClient()
+      ? "LINE 身分已連線"
+      : "LINE 身分已連線（外部瀏覽器）";
+    status.className = "line-status ok";
+
+    // Keep identity locally in memory only; do not send profile data to a server.
+    window.chillingLineIdentity = {
+      displayName: profile.displayName,
+      userId: profile.userId
+    };
+
+    console.log("LIFF initialized:", {
+      isInClient: liff.isInClient(),
+      os: liff.getOS(),
+      displayName: profile.displayName
+    });
+  } catch (error) {
+    console.error("LIFF init error:", error);
+    greeting.textContent = "LINE 身分辨識失敗（Demo 仍可使用）";
+    status.textContent = "LINE 連線失敗";
+    status.className = "line-status error";
+  }
+}
+
+document.addEventListener("DOMContentLoaded", initLineIdentity);
+// ===== End LINE identity test =====
+
+
 const students = [
  {name:"王小明",remaining:6,total:24,freq:1.8,last:"8/6",eta:"9/2",renew:"8/25–9/5",status:"renewal",label:"即將續約",prob:78},
  {name:"陳小華",remaining:15,total:24,freq:0.8,last:"7/26",eta:"12/18",renew:"需先恢復頻率",status:"risk",label:"高風險",prob:39},

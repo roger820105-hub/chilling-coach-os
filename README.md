@@ -92,3 +92,19 @@ renewal_probability 第一版先使用規則分數：
 - 取消 / 請假比例
 
 累積 3–6 個月資料後，再改成真正的統計 / ML 預測模型。
+
+
+## V2：LINE 身分辨識測試
+本版已加入 LINE LIFF SDK，使用 Developing LIFF ID：
+`2011008227-7rnEFNrI`
+
+測試目的：
+- 從 LINE MINI App 開啟時讀取實際 LINE 顯示名稱
+- 頁首顯示「LINE 身分已連線」
+- 外部瀏覽器會透過 LINE Login 流程登入
+- 尚未接資料庫，因此教練 / 主管權限切換仍為 Demo
+
+安全注意：
+- 本版只在瀏覽器記憶體中使用 `liff.getProfile()` 的結果。
+- 正式接後端時，不會把 `getProfile()` 取得的 userId / displayName 直接當可信任身分送給伺服器。
+- 正式版會把 LINE ID token 或 access token 傳給後端，由後端向 LINE 驗證後再對應資料庫權限。
