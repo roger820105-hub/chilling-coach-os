@@ -186,3 +186,21 @@ No new environment variables are required.
 - 方案包含名稱、購買堂數、剩餘堂數、金額、到期日
 - LINE Bot 的「某某剩幾堂」會讀真實方案
 - 有有效方案後，預約指令可建立 sessions
+
+
+# V5C — Complete session + deduct + training records
+
+Before deploying, run `supabase_v5c_migration.sql` in Supabase SQL Editor.
+
+New LINE commands:
+- `測試學員A 完成上課`
+- `測試學員A 8/12 完成上課`
+
+Training record:
+```
+測試學員A 8/12
+Back squat 30kg 10*3
+Bench press 20kg 12*3 RPE8
+```
+
+Completion uses the Postgres RPC `complete_session_and_deduct()` so session completion and remaining-session deduction happen in one database transaction.
