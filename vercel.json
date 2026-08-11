@@ -8,6 +8,10 @@
     {
       "source": "/api/students",
       "destination": "/api/students.js"
+    },
+    {
+      "source": "/api/packages",
+      "destination": "/api/packages.js"
     }
   ]
 }

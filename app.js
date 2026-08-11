@@ -120,6 +120,7 @@ document.addEventListener("DOMContentLoaded", initLineAccount);
 
 
 let students = [];
+let currentStudent = null;
 const list = document.getElementById("studentList");
 const studentLoadState = document.getElementById("studentLoadState");
 
@@ -230,7 +231,8 @@ const coachView=document.getElementById("coachView"), managerView=document.getEl
 document.getElementById("coachBtn").onclick=()=>{coachView.classList.remove("hidden");managerView.classList.add("hidden");coachBtn.classList.add("active");managerBtn.classList.remove("active")};
 document.getElementById("managerBtn").onclick=()=>{managerView.classList.remove("hidden");coachView.classList.add("hidden");managerBtn.classList.add("active");coachBtn.classList.remove("active")};
 
-function openStudent(s){
+async function openStudent(s){
+ currentStudent = s;
  document.getElementById("dialogName").textContent=s.name;
  document.getElementById("dialogBody").innerHTML=`
  <div class="detail-grid">
@@ -239,12 +241,11 @@ function openStudent(s){
   <div><small>電話</small><b>${s.phone ? escapeHtml(s.phone) : "—"}</b></div>
   <div><small>教練關係</small><b>主要教練</b></div>
  </div>
- <div class="eyebrow">備註</div>
- <div class="timeline">
-  <p>${s.note ? escapeHtml(s.note) : "尚無備註"}</p>
- </div>
- <div class="callout">V4 已完成真實學員資料。剩餘堂數、上課紀錄與續約預測會在下一階段接上 packages / sessions。</div>`;
+ <div id="packageSummary" class="callout">正在讀取課程方案…</div>
+ <div class="eyebrow" style="margin-top:16px">備註</div>
+ <div class="timeline"><p>${s.note ? escapeHtml(s.note) : "尚無備註"}</p></div>`;
  document.getElementById("studentDialog").showModal();
+ await loadStudentPackage(s.id);
 }
 
 window.completeSession=function(name){
@@ -321,6 +322,49 @@ saveStudentBtn.onclick=async()=>{
     saveStudentBtn.disabled=false;
     saveStudentBtn.textContent="建立學員";
   }
+};
+
+
+async function loadStudentPackage(studentId){
+  const box=document.getElementById("packageSummary");
+  if(!box||!window.chillingLineAccessToken)return;
+  try{
+    const response=await fetch(`/api/packages?student_id=${encodeURIComponent(studentId)}`,{headers:{Authorization:`Bearer ${window.chillingLineAccessToken}`}});
+    const payload=await response.json();
+    if(!response.ok)throw new Error(payload.error||"Package load failed");
+    const pkg=payload.package;
+    if(!pkg){box.innerHTML="<b>目前沒有有效方案</b><br>請建立方案後再進行預約與扣堂。";return;}
+    box.innerHTML=`<b>${escapeHtml(pkg.package_name||`${pkg.purchased_sessions}堂方案`)}</b><br>剩餘：${pkg.remaining_sessions} / ${pkg.purchased_sessions} 堂${pkg.expires_at?`<br>有效至：${escapeHtml(pkg.expires_at)}`:""}${Number(pkg.price)>0?`<br>金額：NT$${Number(pkg.price).toLocaleString()}`:""}`;
+  }catch(e){console.error(e);box.textContent="方案資料讀取失敗。";}
+}
+const packageDialog=document.getElementById("packageDialog");
+const packageMessage=document.getElementById("packageMessage");
+document.getElementById("openPackageBtn").onclick=()=>{
+  if(!currentStudent)return;
+  document.getElementById("packageStudentName").textContent=`${currentStudent.name}｜建立課程方案`;
+  ["packageName","packageSessions","packagePrice","packageExpiresAt"].forEach(id=>document.getElementById(id).value="");
+  packageMessage.textContent="";
+  packageDialog.showModal();
+};
+document.getElementById("closePackageDialog").onclick=()=>packageDialog.close();
+document.getElementById("savePackageBtn").onclick=async()=>{
+  const purchasedSessions=Number(document.getElementById("packageSessions").value);
+  if(!Number.isInteger(purchasedSessions)||purchasedSessions<=0){packageMessage.textContent="請輸入正確的購買堂數。";packageMessage.className="form-message error";return;}
+  try{
+    packageMessage.textContent="正在建立方案…";
+    const response=await fetch("/api/packages",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${window.chillingLineAccessToken}`},body:JSON.stringify({
+      studentId:currentStudent.id,
+      packageName:document.getElementById("packageName").value.trim(),
+      purchasedSessions,
+      price:Number(document.getElementById("packagePrice").value||0),
+      expiresAt:document.getElementById("packageExpiresAt").value||null
+    })});
+    const payload=await response.json();
+    if(!response.ok)throw new Error(payload.error||"Create package failed");
+    packageMessage.textContent="方案建立成功。";packageMessage.className="form-message ok";
+    await loadStudentPackage(currentStudent.id);
+    setTimeout(()=>packageDialog.close(),400);
+  }catch(e){console.error(e);packageMessage.textContent="建立失敗，請稍後再試。";packageMessage.className="form-message error";}
 };
 
 document.getElementById("exportBtn").onclick=()=>alert("MVP 下一步：可輸出 Excel / PDF 月報，或每日自動推送至主管 LINE。");

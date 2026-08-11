@@ -181,23 +181,8 @@ Keep:
 No new environment variables are required.
 
 
-# V5A — LINE Bot Messaging API
-
-新增 `/api/webhook`
-
-支援：
-- 幫助
-- 我的權限
-- 我的學員
-- 王小明剩幾堂
-- 3/1 15:00 王小明 預約上課
-
-Vercel 新增環境變數：
-- LINE_CHANNEL_SECRET
-- LINE_CHANNEL_ACCESS_TOKEN
-
-Webhook URL：
-https://chilling-coach-os.vercel.app/api/webhook
-
-安全：
-Webhook 在解析 JSON 前，先以 Messaging API Channel Secret 驗證 x-line-signature。
+# V5B
+- MINI App 學員詳情可建立課程方案
+- 方案包含名稱、購買堂數、剩餘堂數、金額、到期日
+- LINE Bot 的「某某剩幾堂」會讀真實方案
+- 有有效方案後，預約指令可建立 sessions

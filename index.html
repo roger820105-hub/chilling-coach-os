@@ -146,13 +146,33 @@
     </div>
   </dialog>
 
+
+  <dialog id="packageDialog">
+    <div class="dialog-card">
+      <button class="x" id="closePackageDialog" type="button">×</button>
+      <div class="eyebrow">PACKAGE</div>
+      <h2 id="packageStudentName">建立課程方案</h2>
+      <label class="field-label">方案名稱</label>
+      <input id="packageName" class="text-input" type="text" maxlength="80" placeholder="例如：私人教練10堂" />
+      <label class="field-label">購買堂數 *</label>
+      <input id="packageSessions" class="text-input" type="number" min="1" max="500" placeholder="例如：10" />
+      <label class="field-label">方案金額</label>
+      <input id="packagePrice" class="text-input" type="number" min="0" step="1" placeholder="例如：20000" />
+      <label class="field-label">到期日</label>
+      <input id="packageExpiresAt" class="text-input" type="date" />
+      <div id="packageMessage" class="form-message"></div>
+      <button class="primary full" id="savePackageBtn" type="button">建立方案</button>
+    </div>
+  </dialog>
+
   <dialog id="studentDialog">
     <form method="dialog" class="dialog-card">
       <button class="x" value="cancel">×</button>
       <div class="eyebrow">STUDENT PROFILE</div>
       <h2 id="dialogName">王小明</h2>
       <div id="dialogBody"></div>
-      <button class="primary full" value="cancel">關閉</button>
+      <button class="primary full" id="openPackageBtn" type="button">＋ 建立課程方案</button>
+<button class="secondary full" value="cancel">關閉</button>
     </form>
   </dialog>
 
