@@ -179,3 +179,25 @@ Keep:
 - api/me.js
 
 No new environment variables are required.
+
+
+# V5A — LINE Bot Messaging API
+
+新增 `/api/webhook`
+
+支援：
+- 幫助
+- 我的權限
+- 我的學員
+- 王小明剩幾堂
+- 3/1 15:00 王小明 預約上課
+
+Vercel 新增環境變數：
+- LINE_CHANNEL_SECRET
+- LINE_CHANNEL_ACCESS_TOKEN
+
+Webhook URL：
+https://chilling-coach-os.vercel.app/api/webhook
+
+安全：
+Webhook 在解析 JSON 前，先以 Messaging API Channel Secret 驗證 x-line-signature。
