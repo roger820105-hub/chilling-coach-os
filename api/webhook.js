@@ -1,5 +1,10 @@
 import crypto from "node:crypto";
 
+/* =========================================================
+   Chilling Coach OS
+   LINE Bot V6 Complete
+   ========================================================= */
+
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
@@ -7,6 +12,10 @@ const json = (data, status = 200) =>
       "Content-Type": "application/json; charset=utf-8",
     },
   });
+
+/* =========================================================
+   LINE
+   ========================================================= */
 
 function verifySignature(raw, signature, secret) {
   if (!signature || !secret) return false;
@@ -47,11 +56,13 @@ async function lineReply(replyToken, text, token) {
   );
 
   if (!r.ok) {
-    throw new Error(
-      `LINE_REPLY:${await r.text()}`
-    );
+    throw new Error(`LINE_REPLY:${await r.text()}`);
   }
 }
+
+/* =========================================================
+   SUPABASE
+   ========================================================= */
 
 const dbHeaders = (secret) => ({
   apikey: secret,
@@ -59,11 +70,11 @@ const dbHeaders = (secret) => ({
   "Content-Type": "application/json",
 });
 
-async function getUser(
-  url,
-  secret,
-  lineUserId
-) {
+/* =========================================================
+   USER / ROLE
+   ========================================================= */
+
+async function getUser(url, secret, lineUserId) {
   const h = dbHeaders(secret);
 
   const r = await fetch(
@@ -94,17 +105,15 @@ async function getUser(
 
   return {
     ...rows[0],
-    roles: (await rr.json()).map(
-      (x) => x.role
-    ),
+    roles: (await rr.json()).map((x) => x.role),
   };
 }
 
-async function getStudents(
-  url,
-  secret,
-  coachId
-) {
+/* =========================================================
+   STUDENTS
+   ========================================================= */
+
+async function getStudents(url, secret, coachId) {
   const h = dbHeaders(secret);
 
   const r = await fetch(
@@ -158,15 +167,11 @@ async function findStudent(
     coachId
   );
 
-  const q = name
-    .trim()
-    .toLowerCase();
+  const q = name.trim().toLowerCase();
 
   const exact = all.filter(
     (s) =>
-      s.name
-        .trim()
-        .toLowerCase() === q
+      s.name.trim().toLowerCase() === q
   );
 
   if (exact.length === 1) {
@@ -182,11 +187,8 @@ async function findStudent(
     };
   }
 
-  const partial = all.filter(
-    (s) =>
-      s.name
-        .toLowerCase()
-        .includes(q)
+  const partial = all.filter((s) =>
+    s.name.toLowerCase().includes(q)
   );
 
   if (partial.length === 1) {
@@ -207,6 +209,20 @@ async function findStudent(
   };
 }
 
+function buildStudentMap(students) {
+  const map = new Map();
+
+  for (const student of students) {
+    map.set(student.id, student);
+  }
+
+  return map;
+}
+
+/* =========================================================
+   PACKAGES
+   ========================================================= */
+
 async function getActivePackage(
   url,
   secret,
@@ -217,7 +233,7 @@ async function getActivePackage(
   const r = await fetch(
     `${url}/rest/v1/packages?student_id=eq.${encodeURIComponent(
       studentId
-    )}&status=eq.active&select=id,package_name,purchased_sessions,remaining_sessions,expires_at&order=purchased_at.desc&limit=1`,
+    )}&status=eq.active&select=id,package_name,purchased_sessions,remaining_sessions,expires_at,status&order=purchased_at.desc&limit=1`,
     { headers: h }
   );
 
@@ -228,76 +244,70 @@ async function getActivePackage(
   return (await r.json())[0] || null;
 }
 
-function parseMonthDay(
-  md,
-  hm = "00:00"
+async function getLatestPackage(
+  url,
+  secret,
+  studentId
 ) {
-  const m = md.match(
-    /^(\d{1,2})\/(\d{1,2})$/
+  const h = dbHeaders(secret);
+
+  const r = await fetch(
+    `${url}/rest/v1/packages?student_id=eq.${encodeURIComponent(
+      studentId
+    )}&select=id,package_name,purchased_sessions,remaining_sessions,expires_at,status,purchased_at&order=purchased_at.desc&limit=1`,
+    { headers: h }
   );
 
-  const t = hm.match(
-    /^(\d{1,2}):(\d{2})$/
-  );
-
-  if (!m || !t) return null;
-
-  const now = new Date();
-
-  let y = now.getFullYear();
-
-  const mo = +m[1];
-  const d = +m[2];
-  const h = +t[1];
-  const mi = +t[2];
-
-  if (
-    mo < 1 ||
-    mo > 12 ||
-    d < 1 ||
-    d > 31 ||
-    h > 23 ||
-    mi > 59
-  ) {
-    return null;
+  if (!r.ok) {
+    throw new Error(await r.text());
   }
 
-  let dt = new Date(
-    Date.UTC(
-      y,
-      mo - 1,
-      d,
-      h - 8,
-      mi
-    )
-  );
-
-  if (
-    (dt - now) /
-      86400000 <
-    -120
-  ) {
-    dt = new Date(
-      Date.UTC(
-        y + 1,
-        mo - 1,
-        d,
-        h - 8,
-        mi
-      )
-    );
-  }
-
-  return dt;
+  return (await r.json())[0] || null;
 }
 
-function taiwanDayBounds(md) {
-  const start = parseMonthDay(
-    md,
-    "00:00"
-  );
+/* =========================================================
+   TIME / TAIWAN
+   ========================================================= */
 
-  if (!start) return null;
+function getTaiwanParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat(
+    "en-US",
+    {
+      timeZone: "Asia/Taipei",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+    }
+  ).formatToParts(date);
+
+  return {
+    year: Number(
+      parts.find((x) => x.type === "year")?.value
+    ),
+    month: Number(
+      parts.find((x) => x.type === "month")?.value
+    ),
+    day: Number(
+      parts.find((x) => x.type === "day")?.value
+    ),
+  };
+}
+
+function taiwanBoundsFromParts(
+  year,
+  month,
+  day
+) {
+  const start = new Date(
+    Date.UTC(
+      year,
+      month - 1,
+      day,
+      -8,
+      0,
+      0
+    )
+  );
 
   const end = new Date(
     start.getTime() +
@@ -310,9 +320,143 @@ function taiwanDayBounds(md) {
   };
 }
 
-function formatTaiwanDate(iso) {
-  const d = new Date(iso);
+function taiwanBoundsOffset(days = 0) {
+  const now = new Date();
 
+  const p = getTaiwanParts(now);
+
+  const localDate = new Date(
+    Date.UTC(
+      p.year,
+      p.month - 1,
+      p.day + days,
+      0,
+      0,
+      0
+    )
+  );
+
+  return taiwanBoundsFromParts(
+    localDate.getUTCFullYear(),
+    localDate.getUTCMonth() + 1,
+    localDate.getUTCDate()
+  );
+}
+
+function parseMonthDay(md, hm = "00:00") {
+  const m = md.match(
+    /^(\d{1,2})\/(\d{1,2})$/
+  );
+
+  const t = hm.match(
+    /^(\d{1,2}):(\d{2})$/
+  );
+
+  if (!m || !t) return null;
+
+  const nowParts = getTaiwanParts();
+
+  let year = nowParts.year;
+
+  const month = Number(m[1]);
+  const day = Number(m[2]);
+  const hour = Number(t[1]);
+  const minute = Number(t[2]);
+
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31 ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    return null;
+  }
+
+  let dt = new Date(
+    Date.UTC(
+      year,
+      month - 1,
+      day,
+      hour - 8,
+      minute
+    )
+  );
+
+  const now = new Date();
+
+  if (
+    (dt.getTime() - now.getTime()) /
+      86400000 <
+    -120
+  ) {
+    year += 1;
+
+    dt = new Date(
+      Date.UTC(
+        year,
+        month - 1,
+        day,
+        hour - 8,
+        minute
+      )
+    );
+  }
+
+  return dt;
+}
+
+function taiwanDayBounds(md) {
+  const m = md.match(
+    /^(\d{1,2})\/(\d{1,2})$/
+  );
+
+  if (!m) return null;
+
+  const nowParts = getTaiwanParts();
+
+  let year = nowParts.year;
+
+  const month = Number(m[1]);
+  const day = Number(m[2]);
+
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31
+  ) {
+    return null;
+  }
+
+  let bounds = taiwanBoundsFromParts(
+    year,
+    month,
+    day
+  );
+
+  const now = new Date();
+
+  if (
+    (bounds.start.getTime() -
+      now.getTime()) /
+      86400000 <
+    -120
+  ) {
+    bounds = taiwanBoundsFromParts(
+      year + 1,
+      month,
+      day
+    );
+  }
+
+  return bounds;
+}
+
+function formatTaiwanDate(iso) {
   return new Intl.DateTimeFormat(
     "zh-TW",
     {
@@ -320,12 +464,22 @@ function formatTaiwanDate(iso) {
       month: "numeric",
       day: "numeric",
     }
-  ).format(d);
+  ).format(new Date(iso));
+}
+
+function formatTaiwanTime(iso) {
+  return new Intl.DateTimeFormat(
+    "zh-TW",
+    {
+      timeZone: "Asia/Taipei",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }
+  ).format(new Date(iso));
 }
 
 function formatTaiwanDateTime(iso) {
-  const d = new Date(iso);
-
   return new Intl.DateTimeFormat(
     "zh-TW",
     {
@@ -336,8 +490,12 @@ function formatTaiwanDateTime(iso) {
       minute: "2-digit",
       hour12: false,
     }
-  ).format(d);
+  ).format(new Date(iso));
 }
+
+/* =========================================================
+   SESSIONS
+   ========================================================= */
 
 async function createBooking(
   url,
@@ -373,15 +531,13 @@ async function createBooking(
       method: "POST",
       headers: {
         ...h,
-        Prefer:
-          "return=representation",
+        Prefer: "return=representation",
       },
       body: JSON.stringify({
         student_id: studentId,
         coach_id: coachId,
         package_id: packageId,
-        scheduled_at:
-          when.toISOString(),
+        scheduled_at: when.toISOString(),
         status: "scheduled",
       }),
     }
@@ -395,6 +551,53 @@ async function createBooking(
     status: "created",
     session: (await r.json())[0],
   };
+}
+
+async function getSessionsBetween(
+  url,
+  secret,
+  coachId,
+  start,
+  end,
+  statusFilter = null,
+  order = "asc",
+  limit = 100
+) {
+  const h = dbHeaders(secret);
+
+  let statusQuery = "";
+
+  if (statusFilter === "scheduled") {
+    statusQuery = "&status=eq.scheduled";
+  }
+
+  if (statusFilter === "completed") {
+    statusQuery = "&status=eq.completed";
+  }
+
+  if (statusFilter === "active") {
+    statusQuery =
+      "&status=in.(scheduled,completed)";
+  }
+
+  const r = await fetch(
+    `${url}/rest/v1/sessions?coach_id=eq.${encodeURIComponent(
+      coachId
+    )}${statusQuery}&scheduled_at=gte.${encodeURIComponent(
+      start.toISOString()
+    )}&scheduled_at=lt.${encodeURIComponent(
+      end.toISOString()
+    )}&select=id,student_id,coach_id,package_id,scheduled_at,completed_at,status&order=scheduled_at.${order}&limit=${limit}`,
+    { headers: h }
+  );
+
+  if (!r.ok) {
+    throw new Error(
+      `GET_SESSIONS:${await r.text()}`
+    );
+  }
+
+  return await r.json();
 }
 
 async function findScheduledSession(
@@ -444,7 +647,7 @@ async function findScheduledSession(
       start.toISOString()
     )}&scheduled_at=lt.${encodeURIComponent(
       end.toISOString()
-    )}&select=id,scheduled_at,package_id,status&order=scheduled_at.asc`,
+    )}&select=id,student_id,scheduled_at,package_id,status&order=scheduled_at.asc`,
     { headers: h }
   );
 
@@ -454,7 +657,7 @@ async function findScheduledSession(
 
   const rows = await r.json();
 
-  if (rows.length === 0) {
+  if (!rows.length) {
     return {
       status: "none",
     };
@@ -473,11 +676,6 @@ async function findScheduledSession(
   };
 }
 
-/*
-  V5H：
-  新增／補寫訓練紀錄時，
-  scheduled 與 completed 都可以找到。
-*/
 async function findTrainingSession(
   url,
   secret,
@@ -505,7 +703,7 @@ async function findTrainingSession(
       bounds.start.toISOString()
     )}&scheduled_at=lt.${encodeURIComponent(
       bounds.end.toISOString()
-    )}&select=id,scheduled_at,package_id,status&order=scheduled_at.asc`,
+    )}&select=id,student_id,scheduled_at,package_id,status&order=scheduled_at.asc`,
     { headers: h }
   );
 
@@ -555,8 +753,7 @@ async function completeSession(
   );
 
   if (!r.ok) {
-    const detail =
-      await r.text();
+    const detail = await r.text();
 
     throw new Error(
       `COMPLETE:${detail}`
@@ -567,6 +764,247 @@ async function completeSession(
 
   return rows[0];
 }
+
+/* =========================================================
+   V6 SCHEDULE
+   ========================================================= */
+
+function getSessionStatusLabel(session) {
+  if (session.status === "completed") {
+    return "✅ 已完成";
+  }
+
+  if (
+    session.status === "scheduled" &&
+    new Date(session.scheduled_at) <
+      new Date()
+  ) {
+    return "⚠️ 待完成";
+  }
+
+  return "🗓 已預約";
+}
+
+async function renderSchedule(
+  url,
+  secret,
+  coachId,
+  sessions,
+  title
+) {
+  if (!sessions.length) {
+    return `${title}\n\n目前沒有課程。`;
+  }
+
+  const students =
+    await getStudents(
+      url,
+      secret,
+      coachId
+    );
+
+  const studentMap =
+    buildStudentMap(students);
+
+  const packageCache =
+    new Map();
+
+  const lines = [];
+
+  for (const session of sessions) {
+    const student =
+      studentMap.get(
+        session.student_id
+      );
+
+    const name =
+      student?.name || "未知學員";
+
+    if (
+      !packageCache.has(
+        session.student_id
+      )
+    ) {
+      const pkg =
+        await getLatestPackage(
+          url,
+          secret,
+          session.student_id
+        );
+
+      packageCache.set(
+        session.student_id,
+        pkg
+      );
+    }
+
+    const pkg =
+      packageCache.get(
+        session.student_id
+      );
+
+    const remaining =
+      pkg
+        ? `${pkg.remaining_sessions}堂`
+        : "—";
+
+    lines.push(
+      `${formatTaiwanTime(
+        session.scheduled_at
+      )}｜${name}\n${getSessionStatusLabel(
+        session
+      )}｜剩餘 ${remaining}`
+    );
+  }
+
+  return `${title}\n\n${lines.join(
+    "\n\n"
+  )}`;
+}
+
+async function getUpcomingBookings(
+  url,
+  secret,
+  coachId,
+  days = 7
+) {
+  const now = new Date();
+
+  const end = new Date(
+    now.getTime() +
+      days * 24 * 60 * 60 * 1000
+  );
+
+  return await getSessionsBetween(
+    url,
+    secret,
+    coachId,
+    now,
+    end,
+    "scheduled",
+    "asc",
+    30
+  );
+}
+
+async function getOverdueSessions(
+  url,
+  secret,
+  coachId
+) {
+  const h = dbHeaders(secret);
+
+  const now =
+    new Date().toISOString();
+
+  const r = await fetch(
+    `${url}/rest/v1/sessions?coach_id=eq.${encodeURIComponent(
+      coachId
+    )}&status=eq.scheduled&scheduled_at=lt.${encodeURIComponent(
+      now
+    )}&select=id,student_id,coach_id,package_id,scheduled_at,status&order=scheduled_at.asc&limit=30`,
+    { headers: h }
+  );
+
+  if (!r.ok) {
+    throw new Error(
+      `OVERDUE:${await r.text()}`
+    );
+  }
+
+  return await r.json();
+}
+
+/* =========================================================
+   V6 STUDENT STATUS
+   ========================================================= */
+
+async function countCompletedSessions(
+  url,
+  secret,
+  coachId,
+  studentId
+) {
+  const h = dbHeaders(secret);
+
+  const r = await fetch(
+    `${url}/rest/v1/sessions?coach_id=eq.${encodeURIComponent(
+      coachId
+    )}&student_id=eq.${encodeURIComponent(
+      studentId
+    )}&status=eq.completed&select=id`,
+    { headers: h }
+  );
+
+  if (!r.ok) {
+    throw new Error(
+      `COUNT_COMPLETED:${await r.text()}`
+    );
+  }
+
+  return (await r.json()).length;
+}
+
+async function getLastCompletedSession(
+  url,
+  secret,
+  coachId,
+  studentId
+) {
+  const h = dbHeaders(secret);
+
+  const r = await fetch(
+    `${url}/rest/v1/sessions?coach_id=eq.${encodeURIComponent(
+      coachId
+    )}&student_id=eq.${encodeURIComponent(
+      studentId
+    )}&status=eq.completed&select=id,scheduled_at,status&order=scheduled_at.desc&limit=1`,
+    { headers: h }
+  );
+
+  if (!r.ok) {
+    throw new Error(
+      `LAST_COMPLETED:${await r.text()}`
+    );
+  }
+
+  return (await r.json())[0] || null;
+}
+
+async function getNextScheduledSession(
+  url,
+  secret,
+  coachId,
+  studentId
+) {
+  const h = dbHeaders(secret);
+
+  const now =
+    new Date().toISOString();
+
+  const r = await fetch(
+    `${url}/rest/v1/sessions?coach_id=eq.${encodeURIComponent(
+      coachId
+    )}&student_id=eq.${encodeURIComponent(
+      studentId
+    )}&status=eq.scheduled&scheduled_at=gte.${encodeURIComponent(
+      now
+    )}&select=id,scheduled_at,status&order=scheduled_at.asc&limit=1`,
+    { headers: h }
+  );
+
+  if (!r.ok) {
+    throw new Error(
+      `NEXT_SESSION:${await r.text()}`
+    );
+  }
+
+  return (await r.json())[0] || null;
+}
+
+/* =========================================================
+   TRAINING RECORDS
+   ========================================================= */
 
 function parseExerciseLine(line) {
   const clean = line.trim();
@@ -580,13 +1018,18 @@ function parseExerciseLine(line) {
   if (!m) return null;
 
   return {
-    exercise_name: m[1].trim(),
-    weight_kg: Number(m[2]),
-    reps: Number(m[3]),
-    sets: Number(m[4]),
-    rpe: m[5]
-      ? Number(m[5])
-      : null,
+    exercise_name:
+      m[1].trim(),
+    weight_kg:
+      Number(m[2]),
+    reps:
+      Number(m[3]),
+    sets:
+      Number(m[4]),
+    rpe:
+      m[5]
+        ? Number(m[5])
+        : null,
   };
 }
 
@@ -600,19 +1043,22 @@ async function saveExerciseRecords(
 ) {
   const h = dbHeaders(secret);
 
-  const payload = records.map(
-    (r) => ({
+  const payload =
+    records.map((r) => ({
       session_id: session.id,
       student_id: studentId,
       coach_id: coachId,
       exercise_name:
         r.exercise_name,
-      weight_kg: r.weight_kg,
-      reps: r.reps,
-      sets: r.sets,
-      rpe: r.rpe,
-    })
-  );
+      weight_kg:
+        r.weight_kg,
+      reps:
+        r.reps,
+      sets:
+        r.sets,
+      rpe:
+        r.rpe,
+    }));
 
   const res = await fetch(
     `${url}/rest/v1/session_exercises`,
@@ -623,7 +1069,8 @@ async function saveExerciseRecords(
         Prefer:
           "return=representation",
       },
-      body: JSON.stringify(payload),
+      body:
+        JSON.stringify(payload),
     }
   );
 
@@ -666,39 +1113,33 @@ async function getTrainingByDate(
   coachId,
   dateText
 ) {
-  const h = dbHeaders(secret);
-
   const b =
     taiwanDayBounds(dateText);
 
   if (!b) return [];
 
-  const sessionsRes =
-    await fetch(
-      `${url}/rest/v1/sessions?student_id=eq.${encodeURIComponent(
-        studentId
-      )}&coach_id=eq.${encodeURIComponent(
-        coachId
-      )}&scheduled_at=gte.${encodeURIComponent(
-        b.start.toISOString()
-      )}&scheduled_at=lt.${encodeURIComponent(
-        b.end.toISOString()
-      )}&select=id,scheduled_at,status&order=scheduled_at.asc`,
-      { headers: h }
-    );
-
-  if (!sessionsRes.ok) {
-    throw new Error(
-      `TRAINING_DATE_SESSIONS:${await sessionsRes.text()}`
-    );
-  }
-
   const sessions =
-    await sessionsRes.json();
+    await getSessionsBetween(
+      url,
+      secret,
+      coachId,
+      b.start,
+      b.end,
+      "active",
+      "asc",
+      30
+    );
+
+  const filtered =
+    sessions.filter(
+      (x) =>
+        x.student_id ===
+        studentId
+    );
 
   const output = [];
 
-  for (const session of sessions) {
+  for (const session of filtered) {
     const exercises =
       await getExercisesForSession(
         url,
@@ -799,8 +1240,6 @@ async function getExerciseHistory(
 
   const rows = await r.json();
 
-  if (!rows.length) return [];
-
   const output = [];
 
   for (const row of rows) {
@@ -833,8 +1272,12 @@ async function getExerciseHistory(
 
   output.sort(
     (a, b) =>
-      new Date(a.scheduled_at) -
-      new Date(b.scheduled_at)
+      new Date(
+        a.scheduled_at
+      ) -
+      new Date(
+        b.scheduled_at
+      )
   );
 
   return output;
@@ -897,12 +1340,20 @@ async function getAllExerciseRecords(
 
   result.sort(
     (a, b) =>
-      new Date(a.scheduled_at) -
-      new Date(b.scheduled_at)
+      new Date(
+        a.scheduled_at
+      ) -
+      new Date(
+        b.scheduled_at
+      )
   );
 
   return result;
 }
+
+/* =========================================================
+   TRAINING ANALYSIS
+   ========================================================= */
 
 function trainingVolume(record) {
   const weight =
@@ -922,7 +1373,11 @@ function trainingVolume(record) {
     return null;
   }
 
-  return weight * reps * sets;
+  return (
+    weight *
+    reps *
+    sets
+  );
 }
 
 function estimated1RM(record) {
@@ -941,11 +1396,6 @@ function estimated1RM(record) {
     return null;
   }
 
-  /*
-    Epley formula。
-    高次數時誤差會增加，
-    所以只在 reps <= 15 顯示。
-  */
   if (reps > 15) {
     return null;
   }
@@ -956,10 +1406,7 @@ function estimated1RM(record) {
   );
 }
 
-function percentChange(
-  before,
-  after
-) {
+function percentChange(before, after) {
   if (
     before == null ||
     after == null ||
@@ -996,9 +1443,7 @@ function formatNumber(
     : n.toFixed(digits);
 }
 
-function formatSignedPercent(
-  value
-) {
+function formatSignedPercent(value) {
   if (
     value == null ||
     !Number.isFinite(
@@ -1010,9 +1455,9 @@ function formatSignedPercent(
 
   const n = Number(value);
 
-  return `${n > 0 ? "+" : ""}${n.toFixed(
-    1
-  )}%`;
+  return `${
+    n > 0 ? "+" : ""
+  }${n.toFixed(1)}%`;
 }
 
 function formatExercise(r) {
@@ -1027,14 +1472,13 @@ function formatExercise(r) {
   }`;
 }
 
-function analyseExerciseProgress(
-  records
-) {
+function analyseExerciseProgress(records) {
   if (!records.length) {
     return null;
   }
 
-  const first = records[0];
+  const first =
+    records[0];
 
   const last =
     records[
@@ -1042,10 +1486,14 @@ function analyseExerciseProgress(
     ];
 
   const firstWeight =
-    Number(first.weight_kg);
+    Number(
+      first.weight_kg
+    );
 
   const lastWeight =
-    Number(last.weight_kg);
+    Number(
+      last.weight_kg
+    );
 
   const firstVolume =
     trainingVolume(first);
@@ -1060,37 +1508,30 @@ function analyseExerciseProgress(
     estimated1RM(last);
 
   return {
-    count: records.length,
+    count:
+      records.length,
+
     first,
     last,
-    weightChange:
-      lastWeight - firstWeight,
+
     weightPct:
       percentChange(
         firstWeight,
         lastWeight
       ),
+
     firstVolume,
     lastVolume,
-    volumeChange:
-      firstVolume != null &&
-      lastVolume != null
-        ? lastVolume -
-          firstVolume
-        : null,
+
     volumePct:
       percentChange(
         firstVolume,
         lastVolume
       ),
+
     first1RM,
     last1RM,
-    rmChange:
-      first1RM != null &&
-      last1RM != null
-        ? last1RM -
-          first1RM
-        : null,
+
     rmPct:
       percentChange(
         first1RM,
@@ -1099,24 +1540,40 @@ function analyseExerciseProgress(
   };
 }
 
+/* =========================================================
+   HELP
+   ========================================================= */
+
 function help() {
   return [
-    "Chilling Coach Bot V5H Complete",
+    "Chilling Coach Bot V6 Complete",
     "",
     "【基本】",
     "・我的權限",
     "・我的學員",
+    "・我的摘要",
+    "",
+    "【課程工作台】",
+    "・今日課表",
+    "・明日課表",
+    "・8/15 課表",
+    "・近期預約",
+    "・待完成課程",
+    "・今日摘要",
+    "",
+    "【學員】",
+    "・王小明 狀態",
     "・王小明剩幾堂",
     "",
-    "【課程】",
-    "・8/12 15:00 王小明 預約上課",
+    "【預約／完成】",
+    "・8/15 15:00 王小明 預約上課",
     "・王小明 完成上課",
-    "・王小明 8/12 完成上課",
+    "・王小明 8/15 完成上課",
     "",
     "【訓練紀錄】",
     "・王小明 上次訓練",
     "・王小明 最近訓練",
-    "・王小明 8/12 訓練紀錄",
+    "・王小明 8/15 訓練紀錄",
     "・王小明 Back squat 紀錄",
     "",
     "【訓練分析】",
@@ -1124,11 +1581,15 @@ function help() {
     "・王小明 訓練摘要",
     "",
     "【新增訓練紀錄】",
-    "王小明 8/12",
+    "王小明 8/15",
     "Back squat 30kg 10*3",
     "Bench press 20kg 12*3 RPE8",
   ].join("\n");
 }
+
+/* =========================================================
+   COMMAND HANDLER
+   ========================================================= */
 
 async function handleCommand(
   text,
@@ -1136,7 +1597,12 @@ async function handleCommand(
   url,
   secret
 ) {
-  const s = text.trim();
+  const s =
+    text.trim();
+
+  /* -------------------------
+     HELP
+     ------------------------- */
 
   if (
     /^(幫助|help|說明|指令)$/i.test(
@@ -1146,6 +1612,10 @@ async function handleCommand(
     return help();
   }
 
+  /* -------------------------
+     ROLE
+     ------------------------- */
+
   if (
     /^(我的權限|權限)$/i.test(
       s
@@ -1153,24 +1623,22 @@ async function handleCommand(
   ) {
     return `你的系統權限：${
       user.roles.length
-        ? user.roles.join(" + ")
+        ? user.roles.join(
+            " + "
+          )
         : "尚未指派"
     }`;
   }
+
+  /* -------------------------
+     STUDENT LIST
+     ------------------------- */
 
   if (
     /^(我的學員|學員名單)$/i.test(
       s
     )
   ) {
-    if (
-      !user.roles.includes(
-        "coach"
-      )
-    ) {
-      return "你的帳號目前沒有教練權限。";
-    }
-
     const list =
       await getStudents(
         url,
@@ -1193,11 +1661,520 @@ async function handleCommand(
     );
   }
 
-  /*
-    ======================
-    V5H 學員訓練摘要
-    ======================
-  */
+  /* =====================================================
+     V6 — TODAY SCHEDULE
+     ===================================================== */
+
+  if (
+    /^(今日課表|今天課表|我今天的課)$/i.test(
+      s
+    )
+  ) {
+    const bounds =
+      taiwanBoundsOffset(0);
+
+    const sessions =
+      await getSessionsBetween(
+        url,
+        secret,
+        user.id,
+        bounds.start,
+        bounds.end,
+        "active"
+      );
+
+    return await renderSchedule(
+      url,
+      secret,
+      user.id,
+      sessions,
+      "📅 今日課表"
+    );
+  }
+
+  /* =====================================================
+     V6 — TOMORROW SCHEDULE
+     ===================================================== */
+
+  if (
+    /^(明日課表|明天課表)$/i.test(
+      s
+    )
+  ) {
+    const bounds =
+      taiwanBoundsOffset(1);
+
+    const sessions =
+      await getSessionsBetween(
+        url,
+        secret,
+        user.id,
+        bounds.start,
+        bounds.end,
+        "active"
+      );
+
+    return await renderSchedule(
+      url,
+      secret,
+      user.id,
+      sessions,
+      "📅 明日課表"
+    );
+  }
+
+  /* =====================================================
+     V6 — SPECIFIC DATE SCHEDULE
+     ===================================================== */
+
+  const dateSchedule =
+    s.match(
+      /^(\d{1,2}\/\d{1,2})\s+課表$/
+    );
+
+  if (dateSchedule) {
+    const bounds =
+      taiwanDayBounds(
+        dateSchedule[1]
+      );
+
+    if (!bounds) {
+      return "日期格式無法辨識，例如：8/15 課表";
+    }
+
+    const sessions =
+      await getSessionsBetween(
+        url,
+        secret,
+        user.id,
+        bounds.start,
+        bounds.end,
+        "active"
+      );
+
+    return await renderSchedule(
+      url,
+      secret,
+      user.id,
+      sessions,
+      `📅 ${dateSchedule[1]} 課表`
+    );
+  }
+
+  /* =====================================================
+     V6 — UPCOMING BOOKINGS
+     ===================================================== */
+
+  if (
+    /^(近期預約|未來預約|接下來的課)$/i.test(
+      s
+    )
+  ) {
+    const sessions =
+      await getUpcomingBookings(
+        url,
+        secret,
+        user.id,
+        7
+      );
+
+    if (!sessions.length) {
+      return "📆 近期預約\n\n未來 7 天目前沒有預約課程。";
+    }
+
+    const students =
+      await getStudents(
+        url,
+        secret,
+        user.id
+      );
+
+    const map =
+      buildStudentMap(students);
+
+    const lines =
+      sessions.map(
+        (session) => {
+          const name =
+            map.get(
+              session.student_id
+            )?.name ||
+            "未知學員";
+
+          return `${formatTaiwanDateTime(
+            session.scheduled_at
+          )}｜${name}`;
+        }
+      );
+
+    return `📆 近期預約｜未來7天
+
+${lines.join("\n")}`;
+  }
+
+  /* =====================================================
+     V6 — OVERDUE
+     ===================================================== */
+
+  if (
+    /^(待完成課程|待完成|未完成課程)$/i.test(
+      s
+    )
+  ) {
+    const sessions =
+      await getOverdueSessions(
+        url,
+        secret,
+        user.id
+      );
+
+    if (!sessions.length) {
+      return "✅ 目前沒有逾時待完成課程。";
+    }
+
+    const students =
+      await getStudents(
+        url,
+        secret,
+        user.id
+      );
+
+    const map =
+      buildStudentMap(students);
+
+    const lines =
+      sessions.map(
+        (session) => {
+          const name =
+            map.get(
+              session.student_id
+            )?.name ||
+            "未知學員";
+
+          return `⚠️ ${formatTaiwanDateTime(
+            session.scheduled_at
+          )}｜${name}`;
+        }
+      );
+
+    return `⚠️ 待完成課程｜${sessions.length}堂
+
+${lines.join("\n")}
+
+完成後可輸入：
+「學員姓名 日期 完成上課」`;
+  }
+
+  /* =====================================================
+     V6 — TODAY SUMMARY
+     ===================================================== */
+
+  if (
+    /^(今日摘要|今天摘要|今日工作)$/i.test(
+      s
+    )
+  ) {
+    const bounds =
+      taiwanBoundsOffset(0);
+
+    const sessions =
+      await getSessionsBetween(
+        url,
+        secret,
+        user.id,
+        bounds.start,
+        bounds.end,
+        "active"
+      );
+
+    const now =
+      new Date();
+
+    const completed =
+      sessions.filter(
+        (x) =>
+          x.status ===
+          "completed"
+      ).length;
+
+    const overdue =
+      sessions.filter(
+        (x) =>
+          x.status ===
+            "scheduled" &&
+          new Date(
+            x.scheduled_at
+          ) < now
+      ).length;
+
+    const upcoming =
+      sessions.filter(
+        (x) =>
+          x.status ===
+            "scheduled" &&
+          new Date(
+            x.scheduled_at
+          ) >= now
+      ).length;
+
+    const students =
+      await getStudents(
+        url,
+        secret,
+        user.id
+      );
+
+    const map =
+      buildStudentMap(students);
+
+    const names = [
+      ...new Set(
+        sessions
+          .map(
+            (x) =>
+              map.get(
+                x.student_id
+              )?.name
+          )
+          .filter(Boolean)
+      ),
+    ];
+
+    return `📊 今日工作摘要
+
+今日課程：${sessions.length}堂
+✅ 已完成：${completed}堂
+⚠️ 待完成：${overdue}堂
+🗓 尚未開始：${upcoming}堂
+
+今日學員：
+${
+  names.length
+    ? names
+        .map(
+          (x) => `・${x}`
+        )
+        .join("\n")
+    : "目前沒有課程"
+}`;
+  }
+
+  /* =====================================================
+     V6 — MY DASHBOARD
+     ===================================================== */
+
+  if (
+    /^(我的摘要|我的工作|教練摘要|工作摘要)$/i.test(
+      s
+    )
+  ) {
+    const students =
+      await getStudents(
+        url,
+        secret,
+        user.id
+      );
+
+    const todayBounds =
+      taiwanBoundsOffset(0);
+
+    const today =
+      await getSessionsBetween(
+        url,
+        secret,
+        user.id,
+        todayBounds.start,
+        todayBounds.end,
+        "active"
+      );
+
+    const overdue =
+      await getOverdueSessions(
+        url,
+        secret,
+        user.id
+      );
+
+    const upcoming =
+      await getUpcomingBookings(
+        url,
+        secret,
+        user.id,
+        7
+      );
+
+    const completedToday =
+      today.filter(
+        (x) =>
+          x.status ===
+          "completed"
+      ).length;
+
+    const next =
+      upcoming[0] || null;
+
+    let nextText =
+      "目前沒有近期預約";
+
+    if (next) {
+      const map =
+        buildStudentMap(
+          students
+        );
+
+      const name =
+        map.get(
+          next.student_id
+        )?.name ||
+        "未知學員";
+
+      nextText =
+        `${formatTaiwanDateTime(
+          next.scheduled_at
+        )}｜${name}`;
+    }
+
+    return `🧭 我的工作摘要
+
+管理學員：${students.length}人
+
+今日課程：${today.length}堂
+今日已完成：${completedToday}堂
+
+未來7天預約：${upcoming.length}堂
+逾時待完成：${overdue.length}堂
+
+下一堂：
+${nextText}`;
+  }
+
+  /* =====================================================
+     V6 — STUDENT STATUS
+     ===================================================== */
+
+  const studentStatus =
+    s.match(
+      /^(.+?)\s+(?:狀態|學員狀態|目前狀態)$/
+    );
+
+  if (studentStatus) {
+    const found =
+      await findStudent(
+        url,
+        secret,
+        user.id,
+        studentStatus[1]
+      );
+
+    if (
+      found.status ===
+      "not_found"
+    ) {
+      return `找不到你的學員「${studentStatus[1].trim()}」。`;
+    }
+
+    if (
+      found.status ===
+      "multiple"
+    ) {
+      return "找到多位符合的學員，請輸入完整姓名。";
+    }
+
+    const pkg =
+      await getLatestPackage(
+        url,
+        secret,
+        found.student.id
+      );
+
+    const completed =
+      await countCompletedSessions(
+        url,
+        secret,
+        user.id,
+        found.student.id
+      );
+
+    const last =
+      await getLastCompletedSession(
+        url,
+        secret,
+        user.id,
+        found.student.id
+      );
+
+    const next =
+      await getNextScheduledSession(
+        url,
+        secret,
+        user.id,
+        found.student.id
+      );
+
+    const recent =
+      await getRecentTraining(
+        url,
+        secret,
+        found.student.id,
+        user.id,
+        1
+      );
+
+    let trainingText =
+      "尚無訓練紀錄";
+
+    if (recent.length) {
+      trainingText =
+        `${formatTaiwanDate(
+          recent[0]
+            .scheduled_at
+        )}\n` +
+        recent[0].exercises
+          .slice(0, 4)
+          .map(formatExercise)
+          .join("\n");
+    }
+
+    return `👤 ${found.student.name}｜學員狀態
+
+方案：${
+      pkg?.package_name ||
+      "目前無方案"
+    }
+
+剩餘：${
+      pkg
+        ? `${pkg.remaining_sessions} / ${pkg.purchased_sessions}堂`
+        : "—"
+    }
+
+累積完成：${completed}堂
+
+上次上課：
+${
+  last
+    ? formatTaiwanDateTime(
+        last.scheduled_at
+      )
+    : "尚無完成課程"
+}
+
+下次預約：
+${
+  next
+    ? formatTaiwanDateTime(
+        next.scheduled_at
+      )
+    : "目前沒有預約"
+}
+
+最近訓練：
+${trainingText}`;
+  }
+
+  /* =====================================================
+     V5H — TRAINING SUMMARY
+     ===================================================== */
 
   const trainingSummary =
     s.match(
@@ -1242,12 +2219,10 @@ async function handleCommand(
     const sessionIds =
       new Set(
         all.map(
-          (r) => r.session_id
+          (r) =>
+            r.session_id
         )
       );
-
-    const lastRecord =
-      all[all.length - 1];
 
     const exerciseMap =
       new Map();
@@ -1282,7 +2257,7 @@ async function handleCommand(
       )
       .slice(0, 5);
 
-    const exerciseBlocks =
+    const blocks =
       ranked.map(
         ([, records]) => {
           const analysis =
@@ -1291,52 +2266,57 @@ async function handleCommand(
             );
 
           const name =
-            records[
-              records.length - 1
-            ].exercise_name;
+            analysis.last
+              .exercise_name;
 
           if (
-            analysis.count < 2
+            analysis.count <
+            2
           ) {
-            return `🏋️ ${name}\n目前 ${analysis.count} 次紀錄｜最新：${formatNumber(
+            return `🏋️ ${name}
+目前 ${analysis.count} 次紀錄
+最新：${formatNumber(
               analysis.last
                 .weight_kg
             )}kg × ${
-              analysis.last.reps
+              analysis.last
+                .reps
             }`;
           }
 
-          const weightText =
-            analysis.weightPct !=
-            null
-              ? `${formatNumber(
-                  analysis.first
-                    .weight_kg
-                )} → ${formatNumber(
-                  analysis.last
-                    .weight_kg
-                )}kg（${formatSignedPercent(
-                  analysis.weightPct
-                )}）`
-              : "—";
+          let line =
+            `🏋️ ${name}\n`;
 
-          const rmText =
-            analysis.last1RM !=
-              null &&
+          line +=
+            `重量：${formatNumber(
+              analysis.first
+                .weight_kg
+            )} → ${formatNumber(
+              analysis.last
+                .weight_kg
+            )}kg（${formatSignedPercent(
+              analysis.weightPct
+            )}）`;
+
+          if (
             analysis.first1RM !=
+              null &&
+            analysis.last1RM !=
               null
-              ? `\n估算1RM：${formatNumber(
-                  analysis.first1RM
-                )} → ${formatNumber(
-                  analysis.last1RM
-                )}kg`
-              : "";
+          ) {
+            line +=
+              `\n估算1RM：${formatNumber(
+                analysis.first1RM
+              )} → ${formatNumber(
+                analysis.last1RM
+              )}kg`;
+          }
 
-          return `🏋️ ${name}\n重量：${weightText}${rmText}`;
+          return line;
         }
       );
 
-    const latestTraining =
+    const recent =
       await getRecentTraining(
         url,
         secret,
@@ -1345,42 +2325,39 @@ async function handleCommand(
         1
       );
 
-    let latestBlock = "";
+    const lastDate =
+      recent.length
+        ? formatTaiwanDate(
+            recent[0]
+              .scheduled_at
+          )
+        : "—";
 
-    if (
-      latestTraining.length
-    ) {
-      const last =
-        latestTraining[0];
+    let latestText =
+      "";
 
-      latestBlock =
-        `\n\n最近一次 ${formatTaiwanDate(
-          last.scheduled_at
-        )}\n` +
-        last.exercises
+    if (recent.length) {
+      latestText =
+        `\n\n最近一次 ${lastDate}\n` +
+        recent[0].exercises
           .map(formatExercise)
           .join("\n");
     }
 
-    return [
-      `📊 ${found.student.name}｜訓練摘要`,
-      "",
-      `已記錄課程：${sessionIds.size} 次`,
-      `最近訓練：${formatTaiwanDate(
-        lastRecord.scheduled_at
-      )}`,
-      `已記錄動作：${exerciseMap.size} 種`,
-      "",
-      ...exerciseBlocks,
-      latestBlock,
-    ].join("\n");
+    return `📊 ${found.student.name}｜訓練摘要
+
+已記錄課程：${sessionIds.size}次
+最近訓練：${lastDate}
+已記錄動作：${exerciseMap.size}種
+
+${blocks.join(
+  "\n\n"
+)}${latestText}`;
   }
 
-  /*
-    ======================
-    V5G 動作進步分析
-    ======================
-  */
+  /* =====================================================
+     V5G — PROGRESS
+     ===================================================== */
 
   const progress =
     s.match(
@@ -1403,17 +2380,10 @@ async function handleCommand(
       );
 
     if (
-      found.status ===
-      "not_found"
+      found.status !==
+      "ok"
     ) {
-      return `找不到你的學員「${studentName}」。`;
-    }
-
-    if (
-      found.status ===
-      "multiple"
-    ) {
-      return "找到多位符合的學員，請輸入完整姓名。";
+      return "找不到唯一符合的學員，請輸入完整姓名。";
     }
 
     const records =
@@ -1461,10 +2431,10 @@ ${formatTaiwanDate(
     const last =
       analysis.last;
 
-    const lines = [
+    const output = [
       `📈 ${found.student.name}｜${last.exercise_name} 進步分析`,
       "",
-      `紀錄次數：${analysis.count} 次`,
+      `紀錄次數：${analysis.count}次`,
       `期間：${formatTaiwanDate(
         first.scheduled_at
       )} → ${formatTaiwanDate(
@@ -1473,18 +2443,10 @@ ${formatTaiwanDate(
       "",
       `第一次：${formatNumber(
         first.weight_kg
-      )}kg × ${
-        first.reps
-      }下 × ${
-        first.sets
-      }組`,
+      )}kg × ${first.reps}下 × ${first.sets}組`,
       `最近一次：${formatNumber(
         last.weight_kg
-      )}kg × ${
-        last.reps
-      }下 × ${
-        last.sets
-      }組`,
+      )}kg × ${last.reps}下 × ${last.sets}組`,
       "",
       `重量：${formatNumber(
         first.weight_kg
@@ -1501,7 +2463,7 @@ ${formatTaiwanDate(
       analysis.lastVolume !=
         null
     ) {
-      lines.push(
+      output.push(
         `Volume：${formatNumber(
           analysis.firstVolume
         )} → ${formatNumber(
@@ -1518,7 +2480,7 @@ ${formatTaiwanDate(
       analysis.last1RM !=
         null
     ) {
-      lines.push(
+      output.push(
         `估算1RM：${formatNumber(
           analysis.first1RM
         )} → ${formatNumber(
@@ -1529,23 +2491,22 @@ ${formatTaiwanDate(
       );
     }
 
-    lines.push(
+    output.push(
       "",
       "※ Volume＝重量×次數×組數；估算1RM採 Epley 公式，僅作趨勢參考。"
     );
 
-    return lines.join("\n");
+    return output.join("\n");
   }
 
-  /*
-    ======================
-    上次／最近訓練
-    ======================
-  */
+  /* =====================================================
+     RECENT TRAINING
+     ===================================================== */
 
-  const recent = s.match(
-    /^(.+?)\s+(?:最近訓練|最近訓練紀錄|上次訓練)$/
-  );
+  const recent =
+    s.match(
+      /^(.+?)\s+(?:最近訓練|最近訓練紀錄|上次訓練)$/
+    );
 
   if (recent) {
     const found =
@@ -1557,21 +2518,16 @@ ${formatTaiwanDate(
       );
 
     if (
-      found.status ===
-      "not_found"
+      found.status !==
+      "ok"
     ) {
-      return `找不到你的學員「${recent[1].trim()}」。`;
-    }
-
-    if (
-      found.status ===
-      "multiple"
-    ) {
-      return "找到多位符合的學員，請輸入完整姓名。";
+      return "找不到唯一符合的學員，請輸入完整姓名。";
     }
 
     const requestedLast =
-      /上次訓練$/.test(s);
+      /上次訓練$/.test(
+        s
+      );
 
     const sessions =
       await getRecentTraining(
@@ -1579,7 +2535,9 @@ ${formatTaiwanDate(
         secret,
         found.student.id,
         user.id,
-        requestedLast ? 1 : 5
+        requestedLast
+          ? 1
+          : 5
       );
 
     if (!sessions.length) {
@@ -1587,37 +2545,26 @@ ${formatTaiwanDate(
     }
 
     if (requestedLast) {
-      const session =
-        sessions[0];
-
-      const exercises =
-        session.exercises
-          .map(formatExercise)
-          .join("\n");
-
       return `📋 ${found.student.name} 上次訓練
 日期：${formatTaiwanDate(
-        session.scheduled_at
+        sessions[0]
+          .scheduled_at
       )}
 
-${exercises}`;
+${sessions[0].exercises
+  .map(formatExercise)
+  .join("\n")}`;
     }
 
     const blocks =
       sessions.map(
-        (session) => {
-          const date =
-            formatTaiwanDate(
-              session.scheduled_at
-            );
-
-          const exercises =
-            session.exercises
-              .map(formatExercise)
-              .join("\n");
-
-          return `${date}\n${exercises}`;
-        }
+        (session) =>
+          `${formatTaiwanDate(
+            session.scheduled_at
+          )}
+${session.exercises
+  .map(formatExercise)
+  .join("\n")}`
       );
 
     return `📋 ${found.student.name}｜最近訓練
@@ -1625,11 +2572,9 @@ ${exercises}`;
 ${blocks.join("\n\n")}`;
   }
 
-  /*
-    ======================
-    指定日期訓練
-    ======================
-  */
+  /* =====================================================
+     DATE TRAINING
+     ===================================================== */
 
   const datedTraining =
     s.match(
@@ -1637,32 +2582,19 @@ ${blocks.join("\n\n")}`;
     );
 
   if (datedTraining) {
-    const studentName =
-      datedTraining[1].trim();
-
-    const dateText =
-      datedTraining[2];
-
     const found =
       await findStudent(
         url,
         secret,
         user.id,
-        studentName
+        datedTraining[1]
       );
 
     if (
-      found.status ===
-      "not_found"
+      found.status !==
+      "ok"
     ) {
-      return `找不到你的學員「${studentName}」。`;
-    }
-
-    if (
-      found.status ===
-      "multiple"
-    ) {
-      return "找到多位符合的學員，請輸入完整姓名。";
+      return "找不到唯一符合的學員，請輸入完整姓名。";
     }
 
     const sessions =
@@ -1671,11 +2603,11 @@ ${blocks.join("\n\n")}`;
         secret,
         found.student.id,
         user.id,
-        dateText
+        datedTraining[2]
       );
 
     if (!sessions.length) {
-      return `${found.student.name} ${dateText} 找不到訓練紀錄。`;
+      return `${found.student.name} ${datedTraining[2]} 找不到訓練紀錄。`;
     }
 
     const blocks =
@@ -1686,16 +2618,14 @@ ${blocks.join("\n\n")}`;
             .join("\n")
       );
 
-    return `📋 ${found.student.name} ${dateText} 訓練紀錄
+    return `📋 ${found.student.name} ${datedTraining[2]} 訓練紀錄
 
 ${blocks.join("\n\n")}`;
   }
 
-  /*
-    ======================
-    單動作歷史
-    ======================
-  */
+  /* =====================================================
+     EXERCISE HISTORY
+     ===================================================== */
 
   const exerciseHistory =
     s.match(
@@ -1703,32 +2633,19 @@ ${blocks.join("\n\n")}`;
     );
 
   if (exerciseHistory) {
-    const studentName =
-      exerciseHistory[1].trim();
-
-    const exerciseName =
-      exerciseHistory[2].trim();
-
     const found =
       await findStudent(
         url,
         secret,
         user.id,
-        studentName
+        exerciseHistory[1]
       );
 
     if (
-      found.status ===
-      "not_found"
+      found.status !==
+      "ok"
     ) {
-      return `找不到你的學員「${studentName}」。`;
-    }
-
-    if (
-      found.status ===
-      "multiple"
-    ) {
-      return "找到多位符合的學員，請輸入完整姓名。";
+      return "找不到唯一符合的學員，請輸入完整姓名。";
     }
 
     const records =
@@ -1737,36 +2654,31 @@ ${blocks.join("\n\n")}`;
         secret,
         found.student.id,
         user.id,
-        exerciseName
+        exerciseHistory[2]
       );
 
     if (!records.length) {
-      return `${found.student.name} 找不到「${exerciseName}」的訓練紀錄。`;
+      return `${found.student.name} 找不到「${exerciseHistory[2]}」的訓練紀錄。`;
     }
 
     const lines =
-      records.map((r) => {
-        const date =
-          formatTaiwanDate(
+      records.map(
+        (r) =>
+          `${formatTaiwanDate(
             r.scheduled_at
-          );
+          )}｜${formatNumber(
+            r.weight_kg
+          )}kg｜${r.reps}下×${r.sets}組${
+            r.rpe != null
+              ? `｜RPE ${formatNumber(
+                  r.rpe
+                )}`
+              : ""
+          }`
+      );
 
-        return `${date}｜${formatNumber(
-          r.weight_kg
-        )}kg｜${
-          r.reps
-        }下×${
-          r.sets
-        }組${
-          r.rpe != null
-            ? `｜RPE ${formatNumber(
-                r.rpe
-              )}`
-            : ""
-        }`;
-      });
-
-    let change = "";
+    let change =
+      "\n\n目前只有 1 次紀錄，尚無法判斷進步趨勢。";
 
     if (
       records.length >= 2
@@ -1800,9 +2712,6 @@ ${blocks.join("\n\n")}`;
             analysis.last1RM
           )}kg`;
       }
-    } else {
-      change =
-        "\n\n目前只有 1 次紀錄，尚無法判斷進步趨勢。";
     }
 
     return `📈 ${found.student.name}｜${records[0].exercise_name}
@@ -1810,15 +2719,14 @@ ${blocks.join("\n\n")}`;
 ${lines.join("\n")}${change}`;
   }
 
-  /*
-    ======================
-    剩餘堂數
-    ======================
-  */
+  /* =====================================================
+     REMAINING
+     ===================================================== */
 
-  const remain = s.match(
-    /^(.+?)\s*剩(?:餘)?(?:幾|多少)堂[？?]?$/
-  );
+  const remain =
+    s.match(
+      /^(.+?)\s*剩(?:餘)?(?:幾|多少)堂[？?]?$/
+    );
 
   if (remain) {
     const found =
@@ -1830,21 +2738,14 @@ ${lines.join("\n")}${change}`;
       );
 
     if (
-      found.status ===
-      "not_found"
+      found.status !==
+      "ok"
     ) {
-      return `找不到你的學員「${remain[1].trim()}」。`;
-    }
-
-    if (
-      found.status ===
-      "multiple"
-    ) {
-      return "找到多位符合的學員，請輸入完整姓名。";
+      return "找不到唯一符合的學員，請輸入完整姓名。";
     }
 
     const pkg =
-      await getActivePackage(
+      await getLatestPackage(
         url,
         secret,
         found.student.id
@@ -1852,7 +2753,7 @@ ${lines.join("\n")}${change}`;
 
     if (!pkg) {
       return `${found.student.name}
-目前沒有有效中的課程方案。`;
+目前沒有課程方案。`;
     }
 
     return `${found.student.name}
@@ -1867,15 +2768,14 @@ ${lines.join("\n")}${change}`;
     }`;
   }
 
-  /*
-    ======================
-    預約課程
-    ======================
-  */
+  /* =====================================================
+     BOOKING
+     ===================================================== */
 
-  const booking = s.match(
-    /^(\d{1,2}\/\d{1,2})\s+(\d{1,2}:\d{2})\s+(.+?)\s*(?:預約上課|預約|上課預約)$/
-  );
+  const booking =
+    s.match(
+      /^(\d{1,2}\/\d{1,2})\s+(\d{1,2}:\d{2})\s+(.+?)\s*(?:預約上課|預約|上課預約)$/
+    );
 
   if (booking) {
     const when =
@@ -1897,7 +2797,8 @@ ${lines.join("\n")}${change}`;
       );
 
     if (
-      found.status !== "ok"
+      found.status !==
+      "ok"
     ) {
       return "找不到唯一符合的學員，請輸入完整姓名。";
     }
@@ -1941,79 +2842,59 @@ ${lines.join("\n")}${change}`;
 ※ 預約不先扣堂，完成上課才扣除。`;
   }
 
-  /*
-    ======================
-    完成課程
-    ======================
-  */
+  /* =====================================================
+     COMPLETE
+     ===================================================== */
 
-  const complete = s.match(
-    /^(.+?)(?:\s+(\d{1,2}\/\d{1,2}))?\s+完成上課$/
-  );
+  const complete =
+    s.match(
+      /^(.+?)(?:\s+(\d{1,2}\/\d{1,2}))?\s+完成上課$/
+    );
 
   if (complete) {
-    const studentName =
-      complete[1].trim();
-
-    const dateText =
-      complete[2] || null;
-
     const found =
       await findStudent(
         url,
         secret,
         user.id,
-        studentName
+        complete[1]
       );
 
     if (
-      found.status !== "ok"
+      found.status !==
+      "ok"
     ) {
       return "找不到唯一符合的學員，請輸入完整姓名。";
     }
 
-    const sessionResult =
+    const result =
       await findScheduledSession(
         url,
         secret,
         user.id,
         found.student.id,
-        dateText
+        complete[2] || null
       );
 
     if (
-      sessionResult.status ===
+      result.status ===
       "none"
     ) {
       return `${found.student.name} 找不到可完成的預約課程。`;
     }
 
     if (
-      sessionResult.status ===
+      result.status ===
       "multiple"
     ) {
-      const options =
-        sessionResult.sessions
-          .map(
-            (x, i) =>
-              `${i + 1}. ${formatTaiwanDateTime(
-                x.scheduled_at
-              )}`
-          )
-          .join("\n");
-
-      return `${found.student.name} 找到多堂未完成課程：
-
-${options}
-
-請指定更明確的日期／時間。`;
+      return `${found.student.name} 找到多堂未完成課程，請指定日期。`;
     }
 
     const done =
       await completeSession(
         url,
         secret,
-        sessionResult.session.id,
+        result.session.id,
         user.id
       );
 
@@ -2022,18 +2903,21 @@ ${options}
 剩餘：${done.remaining_sessions}堂`;
   }
 
-  /*
-    ======================
-    新增／補登訓練紀錄
-    ======================
-  */
+  /* =====================================================
+     ADD TRAINING RECORD
+     ===================================================== */
 
-  const lines = s
-    .split(/\r?\n/)
-    .map((x) => x.trim())
-    .filter(Boolean);
+  const lines =
+    s
+      .split(/\r?\n/)
+      .map(
+        (x) => x.trim()
+      )
+      .filter(Boolean);
 
-  if (lines.length >= 2) {
+  if (
+    lines.length >= 2
+  ) {
     const head =
       lines[0].match(
         /^(.+?)\s+(\d{1,2}\/\d{1,2})$/
@@ -2049,7 +2933,8 @@ ${options}
         );
 
       if (
-        found.status !== "ok"
+        found.status !==
+        "ok"
       ) {
         return "找不到唯一符合的學員，請輸入完整姓名。";
       }
@@ -2078,8 +2963,7 @@ ${options}
         return `目前無法辨識訓練紀錄格式。
 
 例如：
-Back squat 30kg 10*3
-Bench press 20kg 12*3 RPE8`;
+Back squat 30kg 10*3`;
       }
 
       const sessionResult =
@@ -2093,13 +2977,6 @@ Bench press 20kg 12*3 RPE8`;
 
       if (
         sessionResult.status ===
-        "bad_date"
-      ) {
-        return "日期格式無法辨識。";
-      }
-
-      if (
-        sessionResult.status ===
         "none"
       ) {
         return `${found.student.name} ${head[2]} 找不到課程，請先建立預約。`;
@@ -2109,26 +2986,7 @@ Bench press 20kg 12*3 RPE8`;
         sessionResult.status ===
         "multiple"
       ) {
-        const options =
-          sessionResult.sessions
-            .map(
-              (x, i) =>
-                `${i + 1}. ${formatTaiwanDateTime(
-                  x.scheduled_at
-                )}｜${
-                  x.status ===
-                  "completed"
-                    ? "已完成"
-                    : "已預約"
-                }`
-            )
-            .join("\n");
-
-        return `${found.student.name} ${head[2]} 有多堂課：
-
-${options}
-
-目前請先在 MINI App 選擇正確課程。`;
+        return `${found.student.name} ${head[2]} 有多堂課，目前請先在 MINI App 選擇正確課程。`;
       }
 
       await saveExerciseRecords(
@@ -2171,23 +3029,22 @@ ${summary}${warn}
 輸入「幫助」查看可用格式。`;
 }
 
-export async function POST(
-  request
-) {
+/* =========================================================
+   POST
+   ========================================================= */
+
+export async function POST(request) {
   const channelSecret =
-    process.env
-      .LINE_CHANNEL_SECRET;
+    process.env.LINE_CHANNEL_SECRET;
 
   const channelToken =
-    process.env
-      .LINE_CHANNEL_ACCESS_TOKEN;
+    process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
   const dbUrl =
     process.env.SUPABASE_URL;
 
   const dbSecret =
-    process.env
-      .SUPABASE_SECRET_KEY;
+    process.env.SUPABASE_SECRET_KEY;
 
   if (
     !channelSecret ||
@@ -2228,7 +3085,8 @@ export async function POST(
   let body;
 
   try {
-    body = JSON.parse(raw);
+    body =
+      JSON.parse(raw);
   } catch {
     return json(
       {
@@ -2239,7 +3097,9 @@ export async function POST(
     );
   }
 
-  if (!body.events?.length) {
+  if (
+    !body.events?.length
+  ) {
     return json({
       ok: true,
     });
@@ -2334,12 +3194,17 @@ export async function POST(
   });
 }
 
+/* =========================================================
+   GET
+   ========================================================= */
+
 export async function GET() {
   return json({
     service:
       "Chilling Coach OS LINE Webhook",
     version:
-      "V5H Complete",
-    status: "ready",
+      "V6 Complete",
+    status:
+      "ready",
   });
 }
