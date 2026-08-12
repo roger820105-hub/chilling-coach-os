@@ -95,7 +95,6 @@ async function getStudents(url, secret, coachId){
 
 async function findStudent(url, secret, coachId, name){
   const all=await getStudents(url,secret,coachId);
-
   const q=name.trim().toLowerCase();
 
   const exact=all.filter(
@@ -141,7 +140,6 @@ function parseMonthDay(md, hm="00:00"){
   if(!m||!t) return null;
 
   const now=new Date();
-
   let y=now.getFullYear();
 
   const mo=+m[1];
@@ -150,31 +148,18 @@ function parseMonthDay(md, hm="00:00"){
   const mi=+t[2];
 
   if(
-    mo<1||mo>12||
-    d<1||d>31||
-    h>23||
-    mi>59
+    mo<1 || mo>12 ||
+    d<1 || d>31 ||
+    h>23 || mi>59
   ) return null;
 
   let dt=new Date(
-    Date.UTC(
-      y,
-      mo-1,
-      d,
-      h-8,
-      mi
-    )
+    Date.UTC(y,mo-1,d,h-8,mi)
   );
 
   if((dt-now)/86400000 < -120){
     dt=new Date(
-      Date.UTC(
-        y+1,
-        mo-1,
-        d,
-        h-8,
-        mi
-      )
+      Date.UTC(y+1,mo-1,d,h-8,mi)
     );
   }
 
@@ -191,6 +176,16 @@ function taiwanDayBounds(md){
   );
 
   return {start,end};
+}
+
+function formatTaiwanDate(iso){
+  const d=new Date(iso);
+
+  return new Intl.DateTimeFormat("zh-TW",{
+    timeZone:"Asia/Taipei",
+    month:"numeric",
+    day:"numeric"
+  }).format(d);
 }
 
 async function createBooking(
@@ -253,7 +248,6 @@ async function findScheduledSession(
   let start,end;
 
   if(dateText){
-
     const b=taiwanDayBounds(dateText);
 
     if(!b)
@@ -261,9 +255,7 @@ async function findScheduledSession(
 
     start=b.start;
     end=b.end;
-
   }else{
-
     const now=new Date();
 
     start=new Date(
@@ -280,7 +272,8 @@ async function findScheduledSession(
     {headers:h}
   );
 
-  if(!r.ok) throw new Error(await r.text());
+  if(!r.ok)
+    throw new Error(await r.text());
 
   const rows=await r.json();
 
@@ -330,7 +323,6 @@ async function completeSession(
 }
 
 function parseExerciseLine(line){
-
   const clean=line.trim();
 
   if(!clean) return null;
@@ -346,9 +338,7 @@ function parseExerciseLine(line){
     weight_kg:Number(m[2]),
     reps:Number(m[3]),
     sets:Number(m[4]),
-    rpe:m[5]
-      ? Number(m[5])
-      : null
+    rpe:m[5] ? Number(m[5]) : null
   };
 }
 
@@ -385,188 +375,183 @@ async function saveExerciseRecords(
     }
   );
 
-  if(!res.ok)
+  if(!res.ok){
     throw new Error(
       `SAVE_EXERCISES:${await res.text()}`
     );
+  }
 
   return await res.json();
 }
 
-/* ============================
-   V5E：查詢訓練紀錄
-============================ */
+/* =========================
+   V5E / V5F 訓練紀錄查詢
+========================= */
 
-async function getExerciseRecordsBySession(
+async function getTrainingByDate(
   url,
   secret,
-  sessionId
-){
-  const h=dbHeaders(secret);
-
-  const r=await fetch(
-    `${url}/rest/v1/session_exercises?session_id=eq.${encodeURIComponent(sessionId)}&select=exercise_name,weight_kg,reps,sets,rpe&order=created_at.asc`,
-    {headers:h}
-  );
-
-  if(!r.ok)
-    throw new Error(
-      `GET_EXERCISES:${await r.text()}`
-    );
-
-  return await r.json();
-}
-
-async function getLastTrainingSession(
-  url,
-  secret,
-  coachId,
-  studentId
-){
-  const h=dbHeaders(secret);
-
-  const r=await fetch(
-    `${url}/rest/v1/sessions?coach_id=eq.${encodeURIComponent(coachId)}&student_id=eq.${encodeURIComponent(studentId)}&status=eq.completed&select=id,scheduled_at&order=scheduled_at.desc&limit=20`,
-    {headers:h}
-  );
-
-  if(!r.ok)
-    throw new Error(
-      `GET_LAST_SESSION:${await r.text()}`
-    );
-
-  const sessions=await r.json();
-
-  for(const session of sessions){
-
-    const exercises=
-      await getExerciseRecordsBySession(
-        url,
-        secret,
-        session.id
-      );
-
-    if(exercises.length){
-      return {
-        session,
-        exercises
-      };
-    }
-  }
-
-  return null;
-}
-
-async function getTrainingSessionByDate(
-  url,
-  secret,
-  coachId,
   studentId,
+  coachId,
   dateText
 ){
   const h=dbHeaders(secret);
+  const b=taiwanDayBounds(dateText);
 
-  const bounds=taiwanDayBounds(dateText);
+  if(!b) return [];
 
-  if(!bounds)
-    return {status:"bad_date"};
-
-  const r=await fetch(
-    `${url}/rest/v1/sessions?coach_id=eq.${encodeURIComponent(coachId)}&student_id=eq.${encodeURIComponent(studentId)}&scheduled_at=gte.${encodeURIComponent(bounds.start.toISOString())}&scheduled_at=lt.${encodeURIComponent(bounds.end.toISOString())}&select=id,scheduled_at,status&order=scheduled_at.asc`,
+  const sessionsRes=await fetch(
+    `${url}/rest/v1/sessions?student_id=eq.${encodeURIComponent(studentId)}&coach_id=eq.${encodeURIComponent(coachId)}&scheduled_at=gte.${encodeURIComponent(b.start.toISOString())}&scheduled_at=lt.${encodeURIComponent(b.end.toISOString())}&select=id,scheduled_at,status&order=scheduled_at.asc`,
     {headers:h}
   );
 
-  if(!r.ok)
+  if(!sessionsRes.ok)
     throw new Error(
-      `GET_DATE_SESSION:${await r.text()}`
+      `TRAINING_DATE_SESSIONS:${await sessionsRes.text()}`
     );
 
-  const sessions=await r.json();
-
-  if(!sessions.length)
-    return {status:"none"};
-
-  const matches=[];
+  const sessions=await sessionsRes.json();
+  const output=[];
 
   for(const session of sessions){
+    const exRes=await fetch(
+      `${url}/rest/v1/session_exercises?session_id=eq.${encodeURIComponent(session.id)}&select=exercise_name,weight_kg,reps,sets,rpe,created_at&order=created_at.asc`,
+      {headers:h}
+    );
 
-    const exercises=
-      await getExerciseRecordsBySession(
-        url,
-        secret,
-        session.id
+    if(!exRes.ok)
+      throw new Error(
+        `TRAINING_DATE_EXERCISES:${await exRes.text()}`
       );
 
+    const exercises=await exRes.json();
+
     if(exercises.length){
-      matches.push({
-        session,
+      output.push({
+        ...session,
         exercises
       });
     }
   }
 
-  if(!matches.length)
-    return {status:"no_records"};
-
-  if(matches.length>1)
-    return {
-      status:"multiple",
-      matches
-    };
-
-  return {
-    status:"ok",
-    ...matches[0]
-  };
+  return output;
 }
 
-function formatTaiwanDate(iso){
+async function getRecentTraining(
+  url,
+  secret,
+  studentId,
+  coachId,
+  limit=5
+){
+  const h=dbHeaders(secret);
 
-  const dt=new Date(iso);
+  const r=await fetch(
+    `${url}/rest/v1/sessions?student_id=eq.${encodeURIComponent(studentId)}&coach_id=eq.${encodeURIComponent(coachId)}&select=id,scheduled_at,status&order=scheduled_at.desc&limit=30`,
+    {headers:h}
+  );
 
-  const parts=
-    new Intl.DateTimeFormat(
-      "zh-TW",
-      {
-        timeZone:"Asia/Taipei",
-        month:"numeric",
-        day:"numeric"
-      }
-    ).formatToParts(dt);
+  if(!r.ok)
+    throw new Error(
+      `RECENT_SESSIONS:${await r.text()}`
+    );
 
-  const month=
-    parts.find(x=>x.type==="month")?.value;
+  const sessions=await r.json();
+  const result=[];
 
-  const day=
-    parts.find(x=>x.type==="day")?.value;
+  for(const session of sessions){
+    const ex=await fetch(
+      `${url}/rest/v1/session_exercises?session_id=eq.${encodeURIComponent(session.id)}&select=exercise_name,weight_kg,reps,sets,rpe,created_at&order=created_at.asc`,
+      {headers:h}
+    );
 
-  return `${month}/${day}`;
+    if(!ex.ok)
+      throw new Error(
+        `RECENT_EXERCISES:${await ex.text()}`
+      );
+
+    const exercises=await ex.json();
+
+    if(exercises.length){
+      result.push({
+        ...session,
+        exercises
+      });
+    }
+
+    if(result.length>=limit)
+      break;
+  }
+
+  return result;
 }
 
-function formatExerciseRecords(records){
+async function getExerciseHistory(
+  url,
+  secret,
+  studentId,
+  coachId,
+  exerciseName
+){
+  const h=dbHeaders(secret);
 
-  return records.map(r=>{
+  const r=await fetch(
+    `${url}/rest/v1/session_exercises?student_id=eq.${encodeURIComponent(studentId)}&coach_id=eq.${encodeURIComponent(coachId)}&exercise_name=ilike.${encodeURIComponent(`%${exerciseName}%`)}&select=session_id,exercise_name,weight_kg,reps,sets,rpe,created_at&order=created_at.asc`,
+    {headers:h}
+  );
 
-    const weight=
-      Number(r.weight_kg);
+  if(!r.ok)
+    throw new Error(
+      `EXERCISE_HISTORY:${await r.text()}`
+    );
 
-    const rpe=
-      r.rpe!==null &&
-      r.rpe!==undefined
-        ? `｜RPE ${Number(r.rpe)}`
-        : "";
+  const rows=await r.json();
 
-    return `・${r.exercise_name}｜${weight}kg｜${r.reps}下×${r.sets}組${rpe}`;
+  if(!rows.length)
+    return [];
 
-  }).join("\n");
+  const output=[];
+
+  for(const row of rows){
+    const s=await fetch(
+      `${url}/rest/v1/sessions?id=eq.${encodeURIComponent(row.session_id)}&select=scheduled_at,status&limit=1`,
+      {headers:h}
+    );
+
+    if(!s.ok)
+      throw new Error(
+        `EXERCISE_SESSION:${await s.text()}`
+      );
+
+    const session=(await s.json())[0];
+
+    if(session){
+      output.push({
+        ...row,
+        scheduled_at:session.scheduled_at,
+        session_status:session.status
+      });
+    }
+  }
+
+  output.sort(
+    (a,b)=>
+      new Date(a.scheduled_at)-
+      new Date(b.scheduled_at)
+  );
+
+  return output;
+}
+
+function formatExercise(r){
+  return `・${r.exercise_name}｜${Number(r.weight_kg)}kg｜${r.reps}下×${r.sets}組${r.rpe!=null?`｜RPE ${r.rpe}`:""}`;
 }
 
 function help(){
-
   return [
-    "Chilling Coach Bot V5E",
+    "Chilling Coach Bot V5F",
     "",
-    "【課程】",
+    "可用指令：",
     "・我的權限",
     "・我的學員",
     "・王小明剩幾堂",
@@ -574,9 +559,11 @@ function help(){
     "・王小明 完成上課",
     "・王小明 8/12 完成上課",
     "",
-    "【訓練紀錄】",
+    "訓練查詢：",
     "・王小明 上次訓練",
+    "・王小明 最近訓練",
     "・王小明 8/12 訓練紀錄",
+    "・王小明 Back squat 紀錄",
     "",
     "新增訓練紀錄：",
     "王小明 8/12",
@@ -591,179 +578,246 @@ async function handleCommand(
   url,
   secret
 ){
-
   const s=text.trim();
 
-  if(
-    /^(幫助|help|說明|指令)$/i.test(s)
-  )
+  if(/^(幫助|help|說明|指令)$/i.test(s))
     return help();
 
-  if(
-    /^(我的權限|權限)$/i.test(s)
-  )
+  if(/^(我的權限|權限)$/i.test(s)){
     return `你的系統權限：${
       user.roles.length
         ? user.roles.join(" + ")
         : "尚未指派"
     }`;
+  }
 
-  if(
-    /^(我的學員|學員名單)$/i.test(s)
-  ){
-
+  if(/^(我的學員|學員名單)$/i.test(s)){
     if(!user.roles.includes("coach"))
       return "你的帳號目前沒有教練權限。";
 
-    const list=
-      await getStudents(
-        url,
-        secret,
-        user.id
-      );
+    const list=await getStudents(
+      url,
+      secret,
+      user.id
+    );
 
     if(!list.length)
       return "你目前沒有綁定中的學員。";
 
-    return `目前共 ${list.length} 位學員：\n`
-      +list
-        .map(
-          (x,i)=>
-            `${i+1}. ${x.name}`
-        )
+    return `目前共 ${list.length} 位學員：\n`+
+      list.map(
+        (x,i)=>`${i+1}. ${x.name}`
+      ).join("\n");
+  }
+
+  /* =========================
+     V5F 最近訓練
+  ========================= */
+
+  const recent=s.match(
+    /^(.+?)\s+(?:最近訓練|最近訓練紀錄|上次訓練)$/
+  );
+
+  if(recent){
+    const found=await findStudent(
+      url,
+      secret,
+      user.id,
+      recent[1]
+    );
+
+    if(found.status==="not_found")
+      return `找不到你的學員「${recent[1].trim()}」。`;
+
+    if(found.status==="multiple")
+      return "找到多位符合的學員，請輸入完整姓名。";
+
+    const requestedLast=/上次訓練$/.test(s);
+
+    const sessions=await getRecentTraining(
+      url,
+      secret,
+      found.student.id,
+      user.id,
+      requestedLast ? 1 : 5
+    );
+
+    if(!sessions.length)
+      return `${found.student.name} 目前沒有訓練紀錄。`;
+
+    if(requestedLast){
+      const session=sessions[0];
+
+      const exercises=session.exercises
+        .map(formatExercise)
         .join("\n");
-  }
 
-  /* ========================
-     V5E：上次訓練
-  ======================== */
+      return `📋 ${found.student.name} 上次訓練\n日期：${formatTaiwanDate(session.scheduled_at)}\n\n${exercises}`;
+    }
 
-  const lastTraining=
-    s.match(
-      /^(.+?)\s+上次訓練(?:紀錄)?$/
-    );
-
-  if(lastTraining){
-
-    const found=
-      await findStudent(
-        url,
-        secret,
-        user.id,
-        lastTraining[1]
+    const blocks=sessions.map(session=>{
+      const date=formatTaiwanDate(
+        session.scheduled_at
       );
 
+      const exercises=session.exercises
+        .map(formatExercise)
+        .join("\n");
+
+      return `${date}\n${exercises}`;
+    });
+
+    return `📋 ${found.student.name}｜最近訓練\n\n${blocks.join("\n\n")}`;
+  }
+
+  /* =========================
+     指定日期訓練紀錄
+  ========================= */
+
+  const datedTraining=s.match(
+    /^(.+?)\s+(\d{1,2}\/\d{1,2})\s+(?:訓練紀錄|訓練)$/
+  );
+
+  if(datedTraining){
+    const studentName=datedTraining[1].trim();
+    const dateText=datedTraining[2];
+
+    const found=await findStudent(
+      url,
+      secret,
+      user.id,
+      studentName
+    );
+
     if(found.status==="not_found")
-      return `找不到你的學員「${lastTraining[1].trim()}」。`;
+      return `找不到你的學員「${studentName}」。`;
 
     if(found.status==="multiple")
       return "找到多位符合的學員，請輸入完整姓名。";
 
-    const result=
-      await getLastTrainingSession(
-        url,
-        secret,
-        user.id,
-        found.student.id
-      );
-
-    if(!result)
-      return `${found.student.name} 目前沒有可查詢的訓練紀錄。`;
-
-    const date=
-      formatTaiwanDate(
-        result.session.scheduled_at
-      );
-
-    return [
-      `📋 ${found.student.name} 上次訓練`,
-      `日期：${date}`,
-      "",
-      formatExerciseRecords(
-        result.exercises
-      )
-    ].join("\n");
-  }
-
-  /* ========================
-     V5E：指定日期訓練紀錄
-  ======================== */
-
-  const dateTraining=
-    s.match(
-      /^(.+?)\s+(\d{1,2}\/\d{1,2})\s+訓練(?:紀錄)?$/
+    const sessions=await getTrainingByDate(
+      url,
+      secret,
+      found.student.id,
+      user.id,
+      dateText
     );
 
-  if(dateTraining){
+    if(!sessions.length)
+      return `${found.student.name} ${dateText} 找不到訓練紀錄。`;
 
+    const blocks=sessions.map(session=>
+      session.exercises
+        .map(formatExercise)
+        .join("\n")
+    );
+
+    return `📋 ${found.student.name} ${dateText} 訓練紀錄\n\n${blocks.join("\n\n")}`;
+  }
+
+  /* =========================
+     V5F 單動作歷史
+  ========================= */
+
+  const exerciseHistory=s.match(
+    /^(.+?)\s+(.+?)\s+(?:紀錄|歷史)$/
+  );
+
+  if(exerciseHistory){
     const studentName=
-      dateTraining[1];
+      exerciseHistory[1].trim();
 
-    const dateText=
-      dateTraining[2];
+    const exerciseName=
+      exerciseHistory[2].trim();
 
-    const found=
-      await findStudent(
-        url,
-        secret,
-        user.id,
-        studentName
-      );
+    const found=await findStudent(
+      url,
+      secret,
+      user.id,
+      studentName
+    );
 
     if(found.status==="not_found")
-      return `找不到你的學員「${studentName.trim()}」。`;
+      return `找不到你的學員「${studentName}」。`;
 
     if(found.status==="multiple")
       return "找到多位符合的學員，請輸入完整姓名。";
 
-    const result=
-      await getTrainingSessionByDate(
-        url,
-        secret,
-        user.id,
-        found.student.id,
-        dateText
+    const records=await getExerciseHistory(
+      url,
+      secret,
+      found.student.id,
+      user.id,
+      exerciseName
+    );
+
+    if(!records.length){
+      return `${found.student.name} 找不到「${exerciseName}」的訓練紀錄。`;
+    }
+
+    const lines=records.map(r=>{
+      const date=formatTaiwanDate(
+        r.scheduled_at
       );
 
-    if(result.status==="bad_date")
-      return "日期格式無法辨識，例如：8/15。";
+      return `${date}｜${Number(r.weight_kg)}kg｜${r.reps}下×${r.sets}組${r.rpe!=null?`｜RPE ${r.rpe}`:""}`;
+    });
 
-    if(result.status==="none")
-      return `${found.student.name} ${dateText} 找不到課程紀錄。`;
+    const first=records[0];
+    const last=records[records.length-1];
 
-    if(result.status==="no_records")
-      return `${found.student.name} ${dateText} 有課程，但目前沒有訓練內容。`;
+    let change="";
 
-    if(result.status==="multiple")
-      return `${found.student.name} ${dateText} 有多堂包含訓練紀錄的課程，目前請先使用 MINI App 查看。`;
+    if(
+      first.weight_kg!=null &&
+      last.weight_kg!=null &&
+      Number(first.weight_kg)>0
+    ){
+      const firstWeight=
+        Number(first.weight_kg);
 
-    return [
-      `📋 ${found.student.name} ${dateText} 訓練紀錄`,
-      "",
-      formatExerciseRecords(
-        result.exercises
-      )
-    ].join("\n");
+      const lastWeight=
+        Number(last.weight_kg);
+
+      const diff=
+        lastWeight-firstWeight;
+
+      const pct=
+        ((diff/firstWeight)*100)
+          .toFixed(1);
+
+      if(diff>0){
+        change=
+          `\n\n📈 重量變化：${firstWeight} → ${lastWeight}kg（+${pct}%）`;
+      }
+      else if(diff<0){
+        change=
+          `\n\n📉 重量變化：${firstWeight} → ${lastWeight}kg（${pct}%）`;
+      }
+      else{
+        change=
+          `\n\n重量變化：目前維持 ${lastWeight}kg`;
+      }
+    }
+
+    return `📈 ${found.student.name}｜${records[0].exercise_name}\n\n${lines.join("\n")}${change}`;
   }
 
-  /* ========================
+  /* =========================
      剩餘堂數
-  ======================== */
+  ========================= */
 
-  const remain=
-    s.match(
-      /^(.+?)\s*剩(?:餘)?(?:幾|多少)堂[？?]?$/
-    );
+  const remain=s.match(
+    /^(.+?)\s*剩(?:餘)?(?:幾|多少)堂[？?]?$/
+  );
 
   if(remain){
-
-    const found=
-      await findStudent(
-        url,
-        secret,
-        user.id,
-        remain[1]
-      );
+    const found=await findStudent(
+      url,
+      secret,
+      user.id,
+      remain[1]
+    );
 
     if(found.status==="not_found")
       return `找不到你的學員「${remain[1].trim()}」。`;
@@ -771,111 +825,100 @@ async function handleCommand(
     if(found.status==="multiple")
       return "找到多位符合的學員，請輸入完整姓名。";
 
-    const pkg=
-      await getActivePackage(
-        url,
-        secret,
-        found.student.id
-      );
+    const pkg=await getActivePackage(
+      url,
+      secret,
+      found.student.id
+    );
 
     if(!pkg)
       return `${found.student.name}\n目前沒有有效中的課程方案。`;
 
-    return `${found.student.name}
-方案：${pkg.package_name||`${pkg.purchased_sessions}堂方案`}
-剩餘：${pkg.remaining_sessions}堂${
+    return `${found.student.name}\n方案：${
+      pkg.package_name ||
+      `${pkg.purchased_sessions}堂方案`
+    }\n剩餘：${pkg.remaining_sessions}堂${
       pkg.expires_at
         ? `\n有效至：${pkg.expires_at}`
         : ""
     }`;
   }
 
-  /* ========================
+  /* =========================
      預約
-  ======================== */
+  ========================= */
 
-  const booking=
-    s.match(
-      /^(\d{1,2}\/\d{1,2})\s+(\d{1,2}:\d{2})\s+(.+?)\s*(?:預約上課|預約|上課預約)$/
-    );
+  const booking=s.match(
+    /^(\d{1,2}\/\d{1,2})\s+(\d{1,2}:\d{2})\s+(.+?)\s*(?:預約上課|預約|上課預約)$/
+  );
 
   if(booking){
-
-    const when=
-      parseMonthDay(
-        booking[1],
-        booking[2]
-      );
+    const when=parseMonthDay(
+      booking[1],
+      booking[2]
+    );
 
     if(!when)
       return "日期或時間無法辨識。";
 
-    const found=
-      await findStudent(
-        url,
-        secret,
-        user.id,
-        booking[3]
-      );
+    const found=await findStudent(
+      url,
+      secret,
+      user.id,
+      booking[3]
+    );
 
     if(found.status!=="ok")
       return "找不到唯一符合的學員，請輸入完整姓名。";
 
-    const pkg=
-      await getActivePackage(
-        url,
-        secret,
-        found.student.id
-      );
+    const pkg=await getActivePackage(
+      url,
+      secret,
+      found.student.id
+    );
 
     if(!pkg)
       return `${found.student.name}目前沒有有效中的課程方案。`;
 
-    const created=
-      await createBooking(
-        url,
-        secret,
-        user.id,
-        found.student.id,
-        pkg.id,
-        when
-      );
+    const created=await createBooking(
+      url,
+      secret,
+      user.id,
+      found.student.id,
+      pkg.id,
+      when
+    );
 
     if(created.status==="collision")
       return `⚠️ ${booking[1]} ${booking[2]} 你已經有其他預約。`;
 
-    return `✅ 已預約 ${found.student.name}
-時間：${booking[1]} ${booking[2]}
-方案：${pkg.package_name||`${pkg.purchased_sessions}堂方案`}
-剩餘：${pkg.remaining_sessions}堂
-
-※ 預約不先扣堂，完成上課才扣除。`;
+    return `✅ 已預約 ${found.student.name}\n時間：${booking[1]} ${booking[2]}\n方案：${
+      pkg.package_name ||
+      `${pkg.purchased_sessions}堂方案`
+    }\n剩餘：${pkg.remaining_sessions}堂\n\n※ 預約不先扣堂，完成上課才扣除。`;
   }
 
-  /* ========================
+  /* =========================
      完成課程
-  ======================== */
+  ========================= */
 
-  const complete=
-    s.match(
-      /^(.+?)(?:\s+(\d{1,2}\/\d{1,2}))?\s+完成上課$/
-    );
+  const complete=s.match(
+    /^(.+?)(?:\s+(\d{1,2}\/\d{1,2}))?\s+完成上課$/
+  );
 
   if(complete){
-
     const studentName=
       complete[1].trim();
 
     const dateText=
       complete[2]||null;
 
-    const found=
-      await findStudent(
-        url,
-        secret,
-        user.id,
-        studentName
-      );
+    const found=await findStudent(
+      url,
+      secret,
+      user.id,
+      studentName
+    );
 
     if(found.status!=="ok")
       return "找不到唯一符合的學員，請輸入完整姓名。";
@@ -895,44 +938,37 @@ async function handleCommand(
     if(sessionResult.status==="multiple")
       return `${found.student.name} 找到多堂未完成課程，請加上日期，例如：${found.student.name} 8/12 完成上課`;
 
-    const done=
-      await completeSession(
-        url,
-        secret,
-        sessionResult.session.id,
-        user.id
-      );
+    const done=await completeSession(
+      url,
+      secret,
+      sessionResult.session.id,
+      user.id
+    );
 
-    return `✅ 已完成 ${found.student.name} 本次課程
-已扣除 1 堂
-剩餘：${done.remaining_sessions}堂`;
+    return `✅ 已完成 ${found.student.name} 本次課程\n已扣除 1 堂\n剩餘：${done.remaining_sessions}堂`;
   }
 
-  /* ========================
+  /* =========================
      新增訓練紀錄
-  ======================== */
+  ========================= */
 
-  const lines=
-    s.split(/\r?\n/)
-      .map(x=>x.trim())
-      .filter(Boolean);
+  const lines=s
+    .split(/\r?\n/)
+    .map(x=>x.trim())
+    .filter(Boolean);
 
   if(lines.length>=2){
-
-    const head=
-      lines[0].match(
-        /^(.+?)\s+(\d{1,2}\/\d{1,2})$/
-      );
+    const head=lines[0].match(
+      /^(.+?)\s+(\d{1,2}\/\d{1,2})$/
+    );
 
     if(head){
-
-      const found=
-        await findStudent(
-          url,
-          secret,
-          user.id,
-          head[1]
-        );
+      const found=await findStudent(
+        url,
+        secret,
+        user.id,
+        head[1]
+      );
 
       if(found.status!=="ok")
         return "找不到唯一符合的學員，請輸入完整姓名。";
@@ -940,10 +976,7 @@ async function handleCommand(
       const records=[];
       const failed=[];
 
-      for(
-        const line of lines.slice(1)
-      ){
-
+      for(const line of lines.slice(1)){
         const parsed=
           parseExerciseLine(line);
 
@@ -954,75 +987,44 @@ async function handleCommand(
       }
 
       if(!records.length){
-
         return "目前無法辨識訓練紀錄格式。\n例如：Back squat 30kg 10*3";
       }
 
-      /*
-       V5D 行為：
-       可以對 completed session 補登紀錄
-      */
-
-      const bounds=
-        taiwanDayBounds(head[2]);
-
-      if(!bounds)
-        return "日期格式無法辨識。";
-
-      const h=
-        dbHeaders(secret);
-
-      const sr=
-        await fetch(
-          `${url}/rest/v1/sessions?coach_id=eq.${encodeURIComponent(user.id)}&student_id=eq.${encodeURIComponent(found.student.id)}&scheduled_at=gte.${encodeURIComponent(bounds.start.toISOString())}&scheduled_at=lt.${encodeURIComponent(bounds.end.toISOString())}&select=id,scheduled_at,package_id,status&order=scheduled_at.asc`,
-          {headers:h}
+      const sessionResult=
+        await findScheduledSession(
+          url,
+          secret,
+          user.id,
+          found.student.id,
+          head[2]
         );
 
-      if(!sr.ok)
-        throw new Error(
-          await sr.text()
-        );
+      if(sessionResult.status==="none")
+        return `${found.student.name} ${head[2]} 找不到已預約課程，請先建立預約。`;
 
-      const sessions=
-        await sr.json();
-
-      if(!sessions.length)
-        return `${found.student.name} ${head[2]} 找不到課程，請先建立預約。`;
-
-      if(sessions.length>1)
-        return `${found.student.name} ${head[2]} 有多堂課程，目前請先在 MINI App 選擇正確課程。`;
-
-      const session=
-        sessions[0];
+      if(sessionResult.status==="multiple")
+        return `${found.student.name} ${head[2]} 有多堂預約，目前請先在 MINI App 選擇正確課程。`;
 
       await saveExerciseRecords(
         url,
         secret,
-        session,
+        sessionResult.session,
         found.student.id,
         user.id,
         records
       );
 
       const summary=
-        formatExerciseRecords(
-          records
-        );
+        records
+          .map(formatExercise)
+          .join("\n");
 
       const warn=
         failed.length
           ? `\n\n⚠️ 未辨識：\n${failed.join("\n")}`
           : "";
 
-      return `✅ 已記錄 ${found.student.name} ${head[2]} 訓練內容
-
-${summary}${warn}
-
-對應：${
-  session.status==="completed"
-    ? "已完成課程"
-    : "已預約課程"
-}`;
+      return `✅ 已記錄 ${found.student.name} ${head[2]} 訓練內容\n\n${summary}${warn}\n\n對應：已完成課程`;
     }
   }
 
@@ -1030,7 +1032,6 @@ ${summary}${warn}
 }
 
 export async function POST(request){
-
   const channelSecret=
     process.env.LINE_CHANNEL_SECRET;
 
@@ -1044,120 +1045,93 @@ export async function POST(request){
     process.env.SUPABASE_SECRET_KEY;
 
   if(
-    !channelSecret||
-    !channelToken||
-    !dbUrl||
+    !channelSecret ||
+    !channelToken ||
+    !dbUrl ||
     !dbSecret
-  )
-    return json(
-      {
-        error:
-          "Server environment is not configured"
-      },
-      500
-    );
+  ){
+    return json({
+      error:"Server environment is not configured"
+    },500);
+  }
 
-  const raw=
-    await request.text();
+  const raw=await request.text();
 
   if(
     !verifySignature(
       raw,
-      request.headers.get(
-        "x-line-signature"
-      ),
+      request.headers.get("x-line-signature"),
       channelSecret
     )
-  )
-    return json(
-      {
-        error:
-          "Invalid LINE signature"
-      },
-      401
-    );
+  ){
+    return json({
+      error:"Invalid LINE signature"
+    },401);
+  }
 
   let body;
 
   try{
     body=JSON.parse(raw);
   }catch{
-    return json(
-      {
-        error:"Invalid JSON"
-      },
-      400
-    );
+    return json({
+      error:"Invalid JSON"
+    },400);
   }
 
   if(!body.events?.length)
     return json({ok:true});
 
-  for(
-    const event of body.events
-  ){
-
+  for(const event of body.events){
     if(
-      event.type!=="message"||
-      event.message?.type!=="text"||
+      event.type!=="message" ||
+      event.message?.type!=="text" ||
       !event.replyToken
-    )
-      continue;
+    ) continue;
 
     try{
-
       const lineUserId=
         event.source?.userId;
 
       if(!lineUserId){
-
         await lineReply(
           event.replyToken,
           "目前只支援一對一文字訊息。",
           channelToken
         );
-
         continue;
       }
 
-      const user=
-        await getUser(
-          dbUrl,
-          dbSecret,
-          lineUserId
-        );
+      const user=await getUser(
+        dbUrl,
+        dbSecret,
+        lineUserId
+      );
 
       if(!user){
-
         await lineReply(
           event.replyToken,
           "你的帳號尚未完成 Chilling Coach OS 註冊，請先開啟 MINI App 登入。",
           channelToken
         );
-
         continue;
       }
 
-      if(
-        !user.roles.includes("coach")
-      ){
-
+      if(!user.roles.includes("coach")){
         await lineReply(
           event.replyToken,
           "你的帳號目前沒有教練權限。",
           channelToken
         );
-
         continue;
       }
 
-      const out=
-        await handleCommand(
-          event.message.text,
-          user,
-          dbUrl,
-          dbSecret
-        );
+      const out=await handleCommand(
+        event.message.text,
+        user,
+        dbUrl,
+        dbSecret
+      );
 
       await lineReply(
         event.replyToken,
@@ -1166,17 +1140,14 @@ export async function POST(request){
       );
 
     }catch(err){
-
       console.error(err);
 
       try{
-
         await lineReply(
           event.replyToken,
           "系統處理這則訊息時發生錯誤，請稍後再試。",
           channelToken
         );
-
       }catch{}
     }
   }
@@ -1185,11 +1156,9 @@ export async function POST(request){
 }
 
 export async function GET(){
-
   return json({
-    service:
-      "Chilling Coach OS LINE Webhook",
-    version:"V5E",
+    service:"Chilling Coach OS LINE Webhook",
+    version:"V5F",
     status:"ready"
   });
 }
