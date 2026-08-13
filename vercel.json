@@ -32,6 +32,10 @@
     {
       "source": "/api/role-request-review",
       "destination": "/api/role-request-review.js"
+    },
+    {
+      "source": "/api/student-health",
+      "destination": "/api/student-health.js"
     }
   ]
 }
