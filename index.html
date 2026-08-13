@@ -34,8 +34,8 @@
         <div class="kpis four">
           <div class="card metric"><span>手上學員</span><strong id="studentCount">0</strong><small>人</small></div>
           <div class="card metric"><span>本月已上課</span><strong id="monthSessions">—</strong><small>堂</small></div>
-          <div class="card metric"><span>30天內預計續約</span><strong>5</strong><small>人</small></div>
-          <div class="card metric risk"><span>需關注學員</span><strong>3</strong><small>人</small></div>
+          <div class="card metric"><span>今日課程</span><strong id="todaySessions">—</strong><small>堂</small></div>
+          <div class="card metric risk"><span>逾時待完成</span><strong id="pendingSessions">—</strong><small>堂</small></div>
         </div>
 
         <div class="section-head">
@@ -60,11 +60,9 @@
             <h3>今日上課</h3>
           </div>
         </div>
-        <div class="card today">
-          <div class="session-row"><div><b>10:00 王小明</b><span>下肢力量｜第 19 堂</span></div><button onclick="completeSession('王小明')">完成課程</button></div>
-          <div class="session-row"><div><b>14:00 陳小華</b><span>上肢推拉｜第 8 堂</span></div><button onclick="completeSession('陳小華')">完成課程</button></div>
-          <div class="session-row"><div><b>16:30 林怡君</b><span>體態調整｜第 13 堂</span></div><button onclick="completeSession('林怡君')">完成課程</button></div>
-        </div>
+        <div class="card today" id="todaySchedule"><div class="load-state">正在載入今日課表…</div></div>
+        <div class="section-head"><div><div class="eyebrow">AI COPILOT</div><h3>教練資料助理</h3></div></div>
+        <div class="card copilot-card"><textarea id="copilotQuery" class="text-input textarea-input" maxlength="500" placeholder="例如：測試學員A 最近進步怎樣？"></textarea><button class="primary" id="askCopilot" type="button">查詢資料</button><div id="copilotAnswer" class="callout">Copilot 只使用你有權限查看的已儲存資料。</div></div>
       </section>
 
       <section id="managerView" class="hidden">

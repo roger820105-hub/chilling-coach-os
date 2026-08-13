@@ -90,7 +90,7 @@ async function initLineAccount() {
     setRoleUI(roles);
 
     if (roles.includes("coach")) {
-      await loadStudents();
+      await Promise.all([loadStudents(), loadDashboard()]);
     }
 
     if (payload.created) {
@@ -245,8 +245,38 @@ async function openStudent(s){
  <div class="eyebrow" style="margin-top:16px">備註</div>
  <div class="timeline"><p>${s.note ? escapeHtml(s.note) : "尚無備註"}</p></div>`;
  document.getElementById("studentDialog").showModal();
- await loadStudentPackage(s.id);
+ await Promise.all([loadStudentPackage(s.id),loadStudentV12Detail(s.id)]);
 }
+
+async function apiJson(path,options={}){
+  const response=await fetch(path,{...options,headers:{Authorization:`Bearer ${window.chillingLineAccessToken}`,...(options.headers||{})}});
+  const payload=await response.json();
+  if(!response.ok)throw new Error(payload.error||"Request failed");
+  return payload;
+}
+async function loadDashboard(){
+ try{
+  const d=await apiJson("/api/dashboard");
+  document.getElementById("monthSessions").textContent=d.metrics.monthCompleted;
+  document.getElementById("todaySessions").textContent=d.metrics.today;
+  document.getElementById("pendingSessions").textContent=d.metrics.pending;
+  const box=document.getElementById("todaySchedule");
+  box.innerHTML=d.today.length?d.today.map(x=>`<div class="session-row"><div><b>${new Intl.DateTimeFormat("zh-TW",{timeZone:"Asia/Taipei",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(x.scheduled_at))} ${escapeHtml(x.student_name)}</b><span>${x.status==="completed"?"已完成":"已預約"}</span></div></div>`).join(""):"<div class=\"load-state empty\">今天沒有課程。</div>";
+ }catch(e){console.error(e);document.getElementById("todaySchedule").textContent="今日課表載入失敗。"}
+}
+async function loadStudentV12Detail(studentId){
+ try{
+  const d=await apiJson(`/api/student-detail?student_id=${encodeURIComponent(studentId)}`), body=document.getElementById("dialogBody"), latest=d.measurements.at(-1), completed=d.sessions.filter(x=>x.status==="completed").length;
+  body.insertAdjacentHTML("beforeend",`<div class="detail-grid v12-detail"><div><small>累積完成</small><b>${completed} 堂</b></div><div><small>身體數據</small><b>${latest?`${latest.weight_kg??"—"} kg / ${latest.body_fat_pct??"—"}%`:"尚未記錄"}</b></div><div><small>評估</small><b>${d.assessments.length} 筆</b></div><div><small>訓練計畫</small><b>${d.plans.filter(x=>x.status==="active").length} 個進行中</b></div></div>`);
+ }catch(e){console.error(e)}
+}
+
+document.getElementById("askCopilot").onclick=async()=>{
+ const answer=document.getElementById("copilotAnswer"), query=document.getElementById("copilotQuery").value.trim();
+ if(!query){answer.textContent="請先輸入問題。";return}
+ answer.textContent="正在整理已儲存資料…";
+ try{const d=await apiJson("/api/copilot",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query})});answer.textContent=d.answer}catch(e){answer.textContent="查詢失敗，請稍後再試。"}
+};
 
 window.completeSession=function(name){
  const s=students.find(x=>x.name===name);

@@ -1,5 +1,7 @@
 # Chilling Coach OS — LINE Mini App MVP
 
+> V12 / 1.0 implementation is included as additive Supabase migrations, live Mini App APIs, and a permission-scoped data Copilot. Deployment instructions: `docs/DEPLOY_V12.md`. Company/Google Sheets mapping contract: `docs/INTEGRATIONS.md`.
+
 這是一個可直接開啟展示的前端原型，先驗證「教練端 + 主管端」操作流程。
 
 ## 已完成

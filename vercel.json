@@ -12,6 +12,18 @@
     {
       "source": "/api/packages",
       "destination": "/api/packages.js"
+    },
+    {
+      "source": "/api/dashboard",
+      "destination": "/api/dashboard.js"
+    },
+    {
+      "source": "/api/student-detail",
+      "destination": "/api/student-detail.js"
+    },
+    {
+      "source": "/api/copilot",
+      "destination": "/api/copilot.js"
     }
   ]
 }
