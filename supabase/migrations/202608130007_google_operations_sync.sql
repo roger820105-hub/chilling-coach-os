@@ -10,6 +10,7 @@ alter table public.leave_requests add column if not exists external_ref text;
 alter table public.leave_requests drop constraint if exists leave_requests_requested_hours_check;
 alter table public.leave_requests add constraint leave_requests_requested_hours_check check (requested_hours is null or requested_hours >= 0);
 create unique index if not exists leave_requests_external_uidx on public.leave_requests(external_source,external_ref) where external_source is not null and external_ref is not null;
+create unique index if not exists leave_requests_external_full_uidx on public.leave_requests(external_source,external_ref);
 
 insert into public.integration_adapters(adapter_key,version,provider,direction,entity_type,field_mapping,config_schema,is_active)
 values
