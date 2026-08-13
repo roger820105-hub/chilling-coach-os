@@ -10,6 +10,7 @@ const atomicTemplate=fs.readFileSync(new URL("../supabase/migrations/20260813000
 const operations=fs.readFileSync(new URL("../api/operations.js",import.meta.url),"utf8");
 const leaveReview=fs.readFileSync(new URL("../supabase/migrations/202608130004_operations_leave_review.sql",import.meta.url),"utf8");
 const html=fs.readFileSync(new URL("../index.html",import.meta.url),"utf8");
+const staffClock=fs.readFileSync(new URL("../supabase/migrations/202608130005_staff_clock_safety.sql",import.meta.url),"utf8");
 for(const marker of ["V6 Complete","createBooking","completeSession","complete_session_and_deduct","session_exercises","今日課表","近期預約","訓練摘要","進步多少","身體變化","最近一次評估","studentLookupMessage"])
  assert.ok(webhook.includes(marker),`V6 regression marker missing: ${marker}`);
 for(const table of ["body_measurements","student_assessments","training_templates","student_training_plans","audit_logs","role_requests"])
@@ -24,4 +25,5 @@ for(const entity of ["training_templates","training_template_items","exercise_li
 for(const entity of ["sales_records","group_classes","work_logs","leave_requests","accounting_exports","integration_adapters"])assert.ok(operations.includes(entity));
 for(const entity of ["review_leave_request","approval_logs","write_audit_log"])assert.ok(leaveReview.includes(entity));
 for(const demo of ["PT 學員</span><strong>143","預估續約率</span><strong>71%","<b>6 位</b> 高流失風險","<b>11 位</b>","<b>21 位</b>"])assert.ok(!html.includes(demo),`Demo metric must not ship: ${demo}`);
+for(const entity of ["work_logs_one_open_per_user_uidx","record_work_clock","write_audit_log"])assert.ok(staffClock.includes(entity));
 console.log("V6 compatibility and V12 migration checks passed");

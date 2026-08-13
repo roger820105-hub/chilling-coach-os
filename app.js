@@ -94,7 +94,7 @@ async function initLineAccount() {
     setRoleUI(roles);
 
     if (roles.includes("coach")) {
-      await Promise.all([loadStudents(), loadDashboard()]);
+      await Promise.all([loadStudents(), loadDashboard(),loadMyOperations()]);
     }
     if (roles.includes("manager") || roles.includes("admin")) await Promise.all([loadRoleRequests(),loadOperations()]);
 
@@ -434,6 +434,19 @@ async function loadOperations(){
 }
 window.reviewLeave=async(id,approve)=>{if(!confirm(approve?"確定核准此請假？":"確定拒絕此請假？"))return;try{await apiJson("/api/operations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requestId:id,approve})});await loadOperations()}catch(e){alert("審核失敗，請重新整理後再試。")}};
 document.getElementById("refreshOperations").onclick=loadOperations;
+
+const leaveDialog=document.getElementById("leaveDialog");
+const statusLabels={pending:"審核中",approved:"已核准",rejected:"已拒絕",cancelled:"已取消"};
+async function loadMyOperations(){
+ try{const d=await apiJson("/api/operations?scope=me");document.getElementById("myWorkHours").textContent=d.metrics.monthHours;document.getElementById("clockState").textContent=d.metrics.clockedIn?`已於 ${new Date(d.openWorkLog.started_at).toLocaleString("zh-TW")} 上班打卡`:`目前尚未上班打卡`;
+  document.getElementById("clockInBtn").disabled=d.metrics.clockedIn;document.getElementById("clockOutBtn").disabled=!d.metrics.clockedIn;
+  document.getElementById("myShiftList").innerHTML=d.shifts.length?d.shifts.map(x=>`<div><b>${new Date(x.starts_at).toLocaleString("zh-TW")} ～ ${new Date(x.ends_at).toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})}</b><span>${escapeHtml(x.status)}${x.note?`｜${escapeHtml(x.note)}`:""}</span></div>`).join(""):`<div class="muted">目前沒有近期班表。</div>`;
+  document.getElementById("myLeaveList").innerHTML=d.leaves.length?d.leaves.map(x=>`<div><b>${escapeHtml(x.leave_type)}｜${new Date(x.starts_at).toLocaleString("zh-TW")}</b><span class="status-text ${escapeHtml(x.status)}">${statusLabels[x.status]||escapeHtml(x.status)}</span></div>`).join(""):`<div class="muted">目前沒有請假紀錄。</div>`;
+ }catch(e){console.error(e);document.getElementById("clockState").textContent="工時資料載入失敗。"}
+}
+async function clock(action){try{await apiJson("/api/operations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action})});await loadMyOperations()}catch(e){alert(action==="clock_in"?"無法上班打卡，可能已有未結束的工時。":"無法下班打卡，請確認已先上班打卡。")}}
+document.getElementById("clockInBtn").onclick=()=>clock("clock_in");document.getElementById("clockOutBtn").onclick=()=>clock("clock_out");document.getElementById("openLeaveBtn").onclick=()=>{document.getElementById("leaveMessage").textContent="";leaveDialog.showModal()};document.getElementById("closeLeaveDialog").onclick=()=>leaveDialog.close();
+document.getElementById("submitLeaveBtn").onclick=async()=>{const msg=document.getElementById("leaveMessage"),body={action:"request_leave",leaveType:document.getElementById("leaveType").value,startsAt:document.getElementById("leaveStartsAt").value,endsAt:document.getElementById("leaveEndsAt").value,reason:document.getElementById("leaveReason").value};try{msg.textContent="正在送出…";await apiJson("/api/operations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});msg.textContent="請假申請已送出。";msg.className="form-message ok";await loadMyOperations();setTimeout(()=>leaveDialog.close(),500)}catch(e){msg.textContent="送出失敗，請確認假別與時間。";msg.className="form-message error"}};
 
 const trainingPlanDialog=document.getElementById("trainingPlanDialog"),trainingPlanContent=document.getElementById("trainingPlanContent");
 document.getElementById("closeTrainingPlanDialog").onclick=()=>trainingPlanDialog.close();

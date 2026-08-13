@@ -62,6 +62,12 @@
           </div>
         </div>
         <div class="card today" id="todaySchedule"><div class="load-state">正在載入今日課表…</div></div>
+        <div class="section-head"><div><div class="eyebrow">STAFF OPERATIONS</div><h3>我的班表與工時</h3></div><button class="secondary" id="openLeaveBtn" type="button">申請請假</button></div>
+        <div class="card staff-card">
+          <div class="staff-summary"><div><small>本月工時</small><strong id="myWorkHours">—</strong><span> 小時</span></div><div id="clockState" class="callout">正在確認打卡狀態…</div></div>
+          <div class="staff-actions"><button class="primary" id="clockInBtn" type="button">上班打卡</button><button class="secondary" id="clockOutBtn" type="button">下班打卡</button></div>
+          <div class="staff-columns"><div><h4>近期班表</h4><div id="myShiftList" class="compact-list"><div class="load-state">載入中…</div></div></div><div><h4>請假紀錄</h4><div id="myLeaveList" class="compact-list"><div class="load-state">載入中…</div></div></div></div>
+        </div>
         <div class="section-head"><div><div class="eyebrow">AI COPILOT</div><h3>教練資料助理</h3></div></div>
         <div class="card copilot-card"><textarea id="copilotQuery" class="text-input textarea-input" maxlength="500" placeholder="例如：測試學員A 最近進步怎樣？"></textarea><button class="primary" id="askCopilot" type="button">查詢資料</button><div id="copilotAnswer" class="callout">Copilot 只使用你有權限查看的已儲存資料。</div></div>
       </section>
@@ -175,6 +181,7 @@
 
   <dialog id="healthDialog"><div class="dialog-card"><button class="x" id="closeHealthDialog" type="button">×</button><div class="eyebrow">HEALTH PROFILE</div><h2 id="healthDialogTitle">新增紀錄</h2><div id="healthForm"></div><div id="healthMessage" class="form-message"></div><button class="primary full" id="saveHealthBtn" type="button">儲存</button></div></dialog>
   <dialog id="trainingPlanDialog"><div class="dialog-card student-profile-card"><button class="x" id="closeTrainingPlanDialog" type="button">×</button><div class="eyebrow">TRAINING PLAN</div><h2>訓練計畫</h2><div id="trainingPlanContent"></div></div></dialog>
+  <dialog id="leaveDialog"><div class="dialog-card"><button class="x" id="closeLeaveDialog" type="button">×</button><div class="eyebrow">LEAVE REQUEST</div><h2>申請請假</h2><label class="field-label">假別 *</label><select id="leaveType" class="text-input"><option value="">請選擇</option><option>事假</option><option>病假</option><option>特休</option><option>其他</option></select><label class="field-label">開始時間 *</label><input id="leaveStartsAt" class="text-input" type="datetime-local"><label class="field-label">結束時間 *</label><input id="leaveEndsAt" class="text-input" type="datetime-local"><label class="field-label">原因</label><textarea id="leaveReason" class="text-input textarea-input" maxlength="500"></textarea><div id="leaveMessage" class="form-message"></div><button class="primary full" id="submitLeaveBtn" type="button">送出申請</button></div></dialog>
 
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="app.js"></script>
