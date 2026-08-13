@@ -2,22 +2,30 @@ const crypto=require("node:crypto"),{config,context,rows,fail}=require("./_lib")
 
 function validSyncSecret(req){const expected=process.env.GOOGLE_SHEETS_SYNC_SECRET||"",actual=String(req.headers["x-sync-secret"]||"");if(!expected||!actual)return false;const a=Buffer.from(expected),b=Buffer.from(actual);return a.length===b.length&&crypto.timingSafeEqual(a,b)}
 
+function nextDate(date){const d=new Date(`${date}T00:00:00+08:00`);d.setDate(d.getDate()+1);return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Taipei"}).format(d)}
+function monthBounds(period){const start=`${period}-01`,d=new Date(`${start}T00:00:00+08:00`);d.setMonth(d.getMonth()+1);return [start,new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Taipei"}).format(d)]}
+function numeric(value){const n=Number(String(value??"").replace(/,/g,""));return Number.isFinite(n)?n:null}
+
 async function googleShiftSync(req,res){
  if(!validSyncSecret(req))return res.status(401).json({error:"Invalid sync secret"});
- const {url,headers}=config(),sheet=String(req.body?.spreadsheetId||""),input=Array.isArray(req.body?.shifts)?req.body.shifts.slice(0,1000):[],period=String(req.body?.period||input.find(x=>/^\d{4}-\d{2}-\d{2}$/.test(String(x?.date||"")))?.date||"").slice(0,7),employees=Array.isArray(req.body?.employees)?req.body.employees.map(x=>String(x||"").trim()).filter(Boolean).slice(0,100):[];
+ const {url,headers}=config(),sheet=String(req.body?.spreadsheetId||""),input=Array.isArray(req.body?.shifts)?req.body.shifts.slice(0,1000):[],overtimeInput=Array.isArray(req.body?.overtime)?req.body.overtime.slice(0,1000):null,leaveInput=Array.isArray(req.body?.leaves)?req.body.leaves.slice(0,1000):null,period=String(req.body?.period||input.find(x=>/^\d{4}-\d{2}-\d{2}$/.test(String(x?.date||"")))?.date||overtimeInput?.find(x=>/^\d{4}-\d{2}-\d{2}$/.test(String(x?.date||"")))?.date||leaveInput?.find(x=>/^\d{4}-\d{2}-\d{2}$/.test(String(x?.date||"")))?.date||"").slice(0,7),employees=Array.isArray(req.body?.employees)?req.body.employees.map(x=>String(x||"").trim()).filter(Boolean).slice(0,100):[];
  if(sheet!=="1uVuYJvA7fucbMAznqVZnggHqZ3HGaV1WzMoO_2ytWH0")return res.status(400).json({error:"Unexpected spreadsheet"});
- const mappings=await rows(url,headers,"staff_external_mappings?provider=eq.google_sheets&select=external_key,user_id"),map=Object.fromEntries(mappings.map(x=>[x.external_key,x.user_id])),unmatched=[...new Set(input.map(x=>String(x.employee||"").trim()).filter(x=>x&&!map[x]))],payload=[];
+ const mappings=await rows(url,headers,"staff_external_mappings?provider=eq.google_sheets&select=external_key,user_id"),map=Object.fromEntries(mappings.map(x=>[x.external_key,x.user_id])),allInputs=[...input,...(overtimeInput||[]),...(leaveInput||[])],unmatched=[...new Set(allInputs.map(x=>String(x.employee||"").trim()).filter(x=>x&&!map[x]))],payload=[];
  for(const x of input){const employee=String(x.employee||"").trim(),code=String(x.shiftCode||"").trim(),date=String(x.date||""),start=String(x.start||""),end=String(x.end||"");if(!map[employee]||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^\d{2}:\d{2}$/.test(start)||!/^\d{2}:\d{2}$/.test(end))continue;let ends=date;if(end<=start){const d=new Date(`${date}T00:00:00+08:00`);d.setDate(d.getDate()+1);ends=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Taipei"}).format(d)}payload.push({user_id:map[employee],starts_at:`${date}T${start}:00+08:00`,ends_at:`${ends}T${end}:00+08:00`,status:"scheduled",external_source:"google_sheets",external_ref:`${sheet}:${employee}:${date}`,note:`Google Sheet 班別 ${code}`})}
  if(payload.length)await rows(url,headers,"shifts?on_conflict=external_source,external_ref",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(payload)});
- let removed=0;
+ let removed=0;const overtimePayload=[],leavePayload=[];
+ for(const x of overtimeInput||[]){const employee=String(x.employee||"").trim(),date=String(x.date||""),start=String(x.start||""),end=String(x.end||""),hours=numeric(x.hours),row=Number(x.row);if(!map[employee]||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^\d{2}:\d{2}$/.test(start)||!/^\d{2}:\d{2}$/.test(end)||hours===null||hours<0||!Number.isInteger(row))continue;const note=[x.note,`前2小時 ${numeric(x.firstTwo)||0}、第3小時後 ${numeric(x.afterTwo)||0}`].filter(Boolean).join("；");overtimePayload.push({user_id:map[employee],started_at:`${date}T${start}:00+08:00`,ended_at:`${end<=start?nextDate(date):date}T${end}:00+08:00`,break_minutes:Math.max(0,Math.round((numeric(x.breakHours)||0)*60)),credited_hours:hours,category:"overtime",status:"approved",source:"google_sheets",external_ref:`${sheet}:overtime:${row}`,note:note.slice(0,500)||null})}
+ if(overtimePayload.length)await rows(url,headers,"work_logs?on_conflict=source,external_ref",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(overtimePayload)});
+ for(const x of leaveInput||[]){const employee=String(x.employee||"").trim(),date=String(x.date||""),start=String(x.start||""),end=String(x.end||""),hours=numeric(x.hours),row=Number(x.row),type=String(x.leaveType||"").trim();if(!map[employee]||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^\d{2}:\d{2}$/.test(start)||!/^\d{2}:\d{2}$/.test(end)||hours===null||hours<0||!Number.isInteger(row)||!type)continue;leavePayload.push({user_id:map[employee],leave_type:type.slice(0,50),starts_at:`${date}T${start}:00+08:00`,ends_at:`${end<=start?nextDate(date):date}T${end}:00+08:00`,requested_hours:hours,reason:String(x.note||"Google Sheet 匯入").slice(0,500),status:"approved",external_source:"google_sheets",external_ref:`${sheet}:leave:${row}`})}
+ if(leavePayload.length)await rows(url,headers,"leave_requests?on_conflict=external_source,external_ref",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(leavePayload)});
  if(/^\d{4}-\d{2}$/.test(period)){
-  const roster=employees.length?employees:Object.keys(map),mappedIds=[...new Set(roster.map(x=>map[x]).filter(Boolean))],start=`${period}-01`,next=new Date(`${start}T00:00:00+08:00`);next.setMonth(next.getMonth()+1);const end=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Taipei"}).format(next);
+  const roster=employees.length?employees:Object.keys(map),mappedIds=[...new Set(roster.map(x=>map[x]).filter(Boolean))],[start,end]=monthBounds(period);
   if(mappedIds.length){
    const existing=await rows(url,headers,`shifts?external_source=eq.google_sheets&user_id=in.(${mappedIds.join(",")})&starts_at=gte.${start}T00:00:00%2B08:00&starts_at=lt.${end}T00:00:00%2B08:00&select=id,external_ref`),desired=new Set(payload.map(x=>x.external_ref)),stale=existing.filter(x=>!desired.has(x.external_ref)).map(x=>x.id);
    if(stale.length){await rows(url,headers,`shifts?id=in.(${stale.join(",")})`,{method:"DELETE",headers:{Prefer:"return=minimal"}});removed=stale.length}
   }
  }
- return res.json({received:input.length,imported:payload.length,removed,unmatched});
+ return res.json({shifts:{received:input.length,imported:payload.length,removed},overtime:{received:overtimeInput?.length||0,imported:overtimePayload.length},leaves:{received:leaveInput?.length||0,imported:leavePayload.length},unmatched});
 }
 
 module.exports=async function(req,res){
@@ -65,19 +73,19 @@ module.exports=async function(req,res){
   }
   if(req.query?.scope==="me"){
    const [workLogs,shifts,leaves]=await Promise.all([
-    rows(c.url,c.headers,`work_logs?user_id=eq.${c.user.id}&started_at=gte.${monthStart}T00:00:00%2B08:00&select=id,started_at,ended_at,break_minutes,status&order=started_at.desc`),
+    rows(c.url,c.headers,`work_logs?user_id=eq.${c.user.id}&started_at=gte.${monthStart}T00:00:00%2B08:00&select=id,started_at,ended_at,break_minutes,credited_hours,category,status&order=started_at.desc`),
     rows(c.url,c.headers,`shifts?user_id=eq.${c.user.id}&starts_at=gte.${today}T00:00:00%2B08:00&select=id,starts_at,ends_at,status,note&order=starts_at.asc&limit=20`),
     rows(c.url,c.headers,`leave_requests?user_id=eq.${c.user.id}&select=id,leave_type,starts_at,ends_at,status,reason,review_note&order=created_at.desc&limit=10`)
    ]);
-   const open=workLogs.find(x=>!x.ended_at)||null, hours=workLogs.reduce((s,x)=>x.ended_at?s+Math.max(0,(new Date(x.ended_at)-new Date(x.started_at))/3600000-(x.break_minutes||0)/60):s,0);
-   return res.json({metrics:{monthHours:Number(hours.toFixed(1)),clockedIn:!!open},openWorkLog:open,shifts,leaves});
+   const open=workLogs.find(x=>!x.ended_at&&x.category!=="overtime")||null,overtimeHours=workLogs.filter(x=>x.category==="overtime").reduce((s,x)=>s+Number(x.credited_hours||0),0),hours=workLogs.filter(x=>x.category!=="overtime").reduce((s,x)=>x.ended_at?s+Math.max(0,(new Date(x.ended_at)-new Date(x.started_at))/3600000-(x.break_minutes||0)/60):s,0);
+   return res.json({metrics:{monthHours:Number(hours.toFixed(1)),overtimeHours:Number(overtimeHours.toFixed(1)),clockedIn:!!open},openWorkLog:open,shifts,leaves});
   }
   if(!isManager)return res.status(403).json({error:"Manager role required"});
   const [sales,classes,attendance,workLogs,shifts,leaves,exports,adapters]=await Promise.all([
    rows(c.url,c.headers,`sales_records?occurred_on=gte.${monthStart}&status=eq.confirmed&select=amount`),
    rows(c.url,c.headers,`group_classes?starts_at=gte.${monthStart}T00:00:00%2B08:00&select=id,status,capacity`),
    rows(c.url,c.headers,"group_class_attendance?select=group_class_id,status,fee"),
-   rows(c.url,c.headers,`work_logs?started_at=gte.${monthStart}T00:00:00%2B08:00&select=started_at,ended_at,break_minutes,status`),
+   rows(c.url,c.headers,`work_logs?started_at=gte.${monthStart}T00:00:00%2B08:00&select=started_at,ended_at,break_minutes,credited_hours,category,status`),
    rows(c.url,c.headers,`shifts?starts_at=gte.${today}T00:00:00%2B08:00&starts_at=lt.${today}T23:59:59%2B08:00&select=id,status`),
    rows(c.url,c.headers,"leave_requests?status=eq.pending&select=id,user_id,leave_type,starts_at,ends_at,reason,created_at&order=created_at.asc"),
    rows(c.url,c.headers,"accounting_exports?select=id,status&order=created_at.desc&limit=50"),
@@ -86,8 +94,8 @@ module.exports=async function(req,res){
   const userIds=[...new Set(leaves.map(x=>x.user_id))]; let users=[];
   if(userIds.length)users=await rows(c.url,c.headers,`users?id=in.(${userIds.map(encodeURIComponent).join(",")})&select=id,display_name`);
   const names=Object.fromEntries(users.map(x=>[x.id,x.display_name]));
-  const hours=workLogs.reduce((sum,x)=>x.ended_at?sum+Math.max(0,(new Date(x.ended_at)-new Date(x.started_at))/3600000-(x.break_minutes||0)/60):sum,0);
+  const overtimeHours=workLogs.filter(x=>x.category==="overtime").reduce((s,x)=>s+Number(x.credited_hours||0),0),hours=workLogs.filter(x=>x.category!=="overtime").reduce((sum,x)=>x.ended_at?sum+Math.max(0,(new Date(x.ended_at)-new Date(x.started_at))/3600000-(x.break_minutes||0)/60):sum,0);
   const attended=attendance.filter(x=>["attended","checked_in","completed"].includes(x.status)).length;
-  res.json({metrics:{monthlySales:sales.reduce((s,x)=>s+Number(x.amount||0),0),groupClasses:classes.length,groupAttendance:attended,workHours:Number(hours.toFixed(1)),todayShifts:shifts.length,pendingLeaves:leaves.length,pendingExports:exports.filter(x=>x.status!=="completed").length,activeAdapters:adapters.filter(x=>x.is_active).length},leaves:leaves.map(x=>({...x,display_name:names[x.user_id]||"使用者"}))});
+  res.json({metrics:{monthlySales:sales.reduce((s,x)=>s+Number(x.amount||0),0),groupClasses:classes.length,groupAttendance:attended,workHours:Number(hours.toFixed(1)),overtimeHours:Number(overtimeHours.toFixed(1)),todayShifts:shifts.length,pendingLeaves:leaves.length,pendingExports:exports.filter(x=>x.status!=="completed").length,activeAdapters:adapters.filter(x=>x.is_active).length},leaves:leaves.map(x=>({...x,display_name:names[x.user_id]||"使用者"}))});
  }catch(e){return fail(res,e)}
 };

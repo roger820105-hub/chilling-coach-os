@@ -427,7 +427,7 @@ document.getElementById("refreshRoleRequests").onclick=loadRoleRequests;
 async function loadOperations(){
  const box=document.getElementById("leaveRequestList"); if(!box)return;
  try{const d=await apiJson("/api/operations"),m=d.metrics;
-  document.getElementById("opsSales").textContent=Number(m.monthlySales).toLocaleString("zh-TW");document.getElementById("opsClasses").textContent=m.groupClasses;document.getElementById("opsHours").textContent=m.workHours;document.getElementById("opsLeaves").textContent=m.pendingLeaves;
+  document.getElementById("opsSales").textContent=Number(m.monthlySales).toLocaleString("zh-TW");document.getElementById("opsClasses").textContent=m.groupClasses;document.getElementById("opsHours").textContent=m.workHours;document.getElementById("opsOvertime").textContent=m.overtimeHours;document.getElementById("opsLeaves").textContent=m.pendingLeaves;
   document.getElementById("opsAdapterState").textContent=m.activeAdapters?`已有 ${m.activeAdapters} 個營運資料介面啟用。`:`Google Sheets 與薪資規則尚未啟用，等待實際欄位與規則。`;
   box.innerHTML=d.leaves.length?d.leaves.map(x=>`<div class="approval-row"><div><b>${escapeHtml(x.display_name)}｜${escapeHtml(x.leave_type)}</b><span>${new Date(x.starts_at).toLocaleString("zh-TW")} ～ ${new Date(x.ends_at).toLocaleString("zh-TW")}${x.reason?`<br>${escapeHtml(x.reason)}`:""}</span></div><div><button class="primary" onclick="reviewLeave('${x.id}',true)">核准</button><button class="secondary" onclick="reviewLeave('${x.id}',false)">拒絕</button></div></div>`).join(""):`<div class="load-state empty">目前沒有待審核請假。</div>`;
  }catch(e){box.textContent="營運資料載入失敗。"}
@@ -441,7 +441,7 @@ window.saveSheetMapping=async(name,selectId)=>{const userId=document.getElementB
 const leaveDialog=document.getElementById("leaveDialog");
 const statusLabels={pending:"審核中",approved:"已核准",rejected:"已拒絕",cancelled:"已取消"};
 async function loadMyOperations(){
- try{const d=await apiJson("/api/operations?scope=me");document.getElementById("myWorkHours").textContent=d.metrics.monthHours;document.getElementById("clockState").textContent=d.metrics.clockedIn?`已於 ${new Date(d.openWorkLog.started_at).toLocaleString("zh-TW")} 上班打卡`:`目前尚未上班打卡`;
+ try{const d=await apiJson("/api/operations?scope=me");document.getElementById("myWorkHours").textContent=d.metrics.monthHours;document.getElementById("myOvertimeHours").textContent=d.metrics.overtimeHours;document.getElementById("clockState").textContent=d.metrics.clockedIn?`已於 ${new Date(d.openWorkLog.started_at).toLocaleString("zh-TW")} 上班打卡`:`目前尚未上班打卡`;
   document.getElementById("clockInBtn").disabled=d.metrics.clockedIn;document.getElementById("clockOutBtn").disabled=!d.metrics.clockedIn;
   document.getElementById("myShiftList").innerHTML=d.shifts.length?d.shifts.map(x=>`<div><b>${new Date(x.starts_at).toLocaleString("zh-TW")} ～ ${new Date(x.ends_at).toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})}</b><span>${escapeHtml(x.status)}${x.note?`｜${escapeHtml(x.note)}`:""}</span></div>`).join(""):`<div class="muted">目前沒有近期班表。</div>`;
   document.getElementById("myLeaveList").innerHTML=d.leaves.length?d.leaves.map(x=>`<div><b>${escapeHtml(x.leave_type)}｜${new Date(x.starts_at).toLocaleString("zh-TW")}</b><span class="status-text ${escapeHtml(x.status)}">${statusLabels[x.status]||escapeHtml(x.status)}</span></div>`).join(""):`<div class="muted">目前沒有請假紀錄。</div>`;

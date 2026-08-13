@@ -1,6 +1,6 @@
 # Google Sheet 班表同步
 
-資料流：`11508丘陵班表_加班請假管理_v2` → Apps Script → Coach OS `/api/operations` → Supabase `shifts`。
+資料流：`11508丘陵班表_加班請假管理_v2` → Apps Script → Coach OS `/api/operations` → Supabase 班表、加班與請假資料。
 
 ## 安全原則
 
@@ -37,9 +37,11 @@ function syncCoachOsShifts() {
       shifts.push({employee, date: Utilities.formatString('%04d-%02d-%02d',year,month,day), shiftCode:code, start:codes[code].start, end:codes[code].end});
     }
   }
+  const overtime = ss.getSheetByName('加班明細').getRange('A6:M200').getDisplayValues().map((r,i)=>({row:i+6,date:r[0],employee:r[1],start:r[2],end:r[3],shiftCode:r[4],breakHours:r[8]||r[7],hours:r[9],firstTwo:r[10],afterTwo:r[11],note:r[12]})).filter(x=>x.date&&x.employee&&x.start&&x.end&&x.hours);
+  const leaves = ss.getSheetByName('請假明細').getRange('A6:J200').getDisplayValues().map((r,i)=>({row:i+6,date:r[0],employee:r[1],leaveType:r[2],start:r[3],end:r[4],hours:r[8],note:r[9]})).filter(x=>x.date&&x.employee&&x.leaveType&&x.start&&x.end&&x.hours);
   const response = UrlFetchApp.fetch('https://chilling-coach-os.vercel.app/api/operations', {
     method:'post', contentType:'application/json', headers:{'x-sync-secret':PropertiesService.getScriptProperties().getProperty('COACH_OS_SYNC_SECRET')},
-    payload:JSON.stringify({action:'google_shift_sync',spreadsheetId:ss.getId(),shifts}), muteHttpExceptions:true
+    payload:JSON.stringify({action:'google_shift_sync',spreadsheetId:ss.getId(),period:Utilities.formatString('%04d-%02d',year,month),shifts,overtime,leaves}), muteHttpExceptions:true
   });
   Logger.log(response.getContentText());
   if (response.getResponseCode() >= 300) throw new Error(response.getContentText());
