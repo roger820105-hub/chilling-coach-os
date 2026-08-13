@@ -4,12 +4,20 @@ function validSyncSecret(req){const expected=process.env.GOOGLE_SHEETS_SYNC_SECR
 
 async function googleShiftSync(req,res){
  if(!validSyncSecret(req))return res.status(401).json({error:"Invalid sync secret"});
- const {url,headers}=config(),sheet=String(req.body?.spreadsheetId||""),input=Array.isArray(req.body?.shifts)?req.body.shifts.slice(0,1000):[];
+ const {url,headers}=config(),sheet=String(req.body?.spreadsheetId||""),input=Array.isArray(req.body?.shifts)?req.body.shifts.slice(0,1000):[],period=String(req.body?.period||""),employees=Array.isArray(req.body?.employees)?req.body.employees.map(x=>String(x||"").trim()).filter(Boolean).slice(0,100):[];
  if(sheet!=="1uVuYJvA7fucbMAznqVZnggHqZ3HGaV1WzMoO_2ytWH0")return res.status(400).json({error:"Unexpected spreadsheet"});
  const mappings=await rows(url,headers,"staff_external_mappings?provider=eq.google_sheets&select=external_key,user_id"),map=Object.fromEntries(mappings.map(x=>[x.external_key,x.user_id])),unmatched=[...new Set(input.map(x=>String(x.employee||"").trim()).filter(x=>x&&!map[x]))],payload=[];
  for(const x of input){const employee=String(x.employee||"").trim(),code=String(x.shiftCode||"").trim(),date=String(x.date||""),start=String(x.start||""),end=String(x.end||"");if(!map[employee]||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^\d{2}:\d{2}$/.test(start)||!/^\d{2}:\d{2}$/.test(end))continue;let ends=date;if(end<=start){const d=new Date(`${date}T00:00:00+08:00`);d.setDate(d.getDate()+1);ends=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Taipei"}).format(d)}payload.push({user_id:map[employee],starts_at:`${date}T${start}:00+08:00`,ends_at:`${ends}T${end}:00+08:00`,status:"scheduled",external_source:"google_sheets",external_ref:`${sheet}:${employee}:${date}`,note:`Google Sheet 班別 ${code}`})}
  if(payload.length)await rows(url,headers,"shifts?on_conflict=external_source,external_ref",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(payload)});
- return res.json({received:input.length,imported:payload.length,unmatched});
+ let removed=0;
+ if(/^\d{4}-\d{2}$/.test(period)&&employees.length){
+  const mappedIds=[...new Set(employees.map(x=>map[x]).filter(Boolean))],start=`${period}-01`,next=new Date(`${start}T00:00:00+08:00`);next.setMonth(next.getMonth()+1);const end=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Taipei"}).format(next);
+  if(mappedIds.length){
+   const existing=await rows(url,headers,`shifts?external_source=eq.google_sheets&user_id=in.(${mappedIds.join(",")})&starts_at=gte.${start}T00:00:00%2B08:00&starts_at=lt.${end}T00:00:00%2B08:00&select=id,external_ref`),desired=new Set(payload.map(x=>x.external_ref)),stale=existing.filter(x=>!desired.has(x.external_ref)).map(x=>x.id);
+   if(stale.length){await rows(url,headers,`shifts?id=in.(${stale.join(",")})`,{method:"DELETE",headers:{Prefer:"return=minimal"}});removed=stale.length}
+  }
+ }
+ return res.json({received:input.length,imported:payload.length,removed,unmatched});
 }
 
 module.exports=async function(req,res){
