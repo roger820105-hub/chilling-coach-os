@@ -97,5 +97,5 @@ module.exports=async function(req,res){
   const overtimeHours=workLogs.filter(x=>x.category==="overtime").reduce((s,x)=>s+Number(x.credited_hours||0),0),hours=workLogs.filter(x=>x.category!=="overtime").reduce((sum,x)=>x.ended_at?sum+Math.max(0,(new Date(x.ended_at)-new Date(x.started_at))/3600000-(x.break_minutes||0)/60):sum,0);
   const attended=attendance.filter(x=>["attended","checked_in","completed"].includes(x.status)).length;
   res.json({metrics:{monthlySales:sales.reduce((s,x)=>s+Number(x.amount||0),0),groupClasses:classes.length,groupAttendance:attended,workHours:Number(hours.toFixed(1)),overtimeHours:Number(overtimeHours.toFixed(1)),todayShifts:shifts.length,pendingLeaves:leaves.length,pendingExports:exports.filter(x=>x.status!=="completed").length,activeAdapters:adapters.filter(x=>x.is_active).length},leaves:leaves.map(x=>({...x,display_name:names[x.user_id]||"使用者"}))});
- }catch(e){return fail(res,e)}
+ }catch(e){if(req.body?.action==="google_shift_sync"&&validSyncSecret(req))return res.status(500).json({error:String(e.message||e).slice(0,1200)});return fail(res,e)}
 };
