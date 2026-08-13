@@ -3,6 +3,12 @@ const {context,rows,fail}=require("./_lib");
 module.exports=async function(req,res){
  try{
   const c=await context(req,["manager","admin"]);
+  if(req.method==="POST"){
+   const id=String(req.body?.requestId||""), approve=req.body?.approve===true;
+   if(!/^[0-9a-f-]{36}$/i.test(id))return res.status(400).json({error:"Invalid request"});
+   const result=await rows(c.url,c.headers,"rpc/review_leave_request",{method:"POST",body:JSON.stringify({p_request_id:id,p_reviewer:c.user.id,p_approve:approve,p_note:String(req.body?.note||"").slice(0,500)||null})});
+   return res.json({request:result});
+  }
   if(req.method!=="GET")return res.status(405).json({error:"Method not allowed"});
   const today=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Taipei"}).format(new Date());
   const monthStart=`${today.slice(0,7)}-01`;

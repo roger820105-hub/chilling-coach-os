@@ -432,7 +432,7 @@ async function loadOperations(){
   box.innerHTML=d.leaves.length?d.leaves.map(x=>`<div class="approval-row"><div><b>${escapeHtml(x.display_name)}｜${escapeHtml(x.leave_type)}</b><span>${new Date(x.starts_at).toLocaleString("zh-TW")} ～ ${new Date(x.ends_at).toLocaleString("zh-TW")}${x.reason?`<br>${escapeHtml(x.reason)}`:""}</span></div><div><button class="primary" onclick="reviewLeave('${x.id}',true)">核准</button><button class="secondary" onclick="reviewLeave('${x.id}',false)">拒絕</button></div></div>`).join(""):`<div class="load-state empty">目前沒有待審核請假。</div>`;
  }catch(e){box.textContent="營運資料載入失敗。"}
 }
-window.reviewLeave=async(id,approve)=>{if(!confirm(approve?"確定核准此請假？":"確定拒絕此請假？"))return;try{await apiJson("/api/leave-review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requestId:id,approve})});await loadOperations()}catch(e){alert("審核失敗，請重新整理後再試。")}};
+window.reviewLeave=async(id,approve)=>{if(!confirm(approve?"確定核准此請假？":"確定拒絕此請假？"))return;try{await apiJson("/api/operations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requestId:id,approve})});await loadOperations()}catch(e){alert("審核失敗，請重新整理後再試。")}};
 document.getElementById("refreshOperations").onclick=loadOperations;
 
 const trainingPlanDialog=document.getElementById("trainingPlanDialog"),trainingPlanContent=document.getElementById("trainingPlanContent");

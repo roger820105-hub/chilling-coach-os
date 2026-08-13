@@ -44,10 +44,6 @@
     {
       "source": "/api/operations",
       "destination": "/api/operations.js"
-    },
-    {
-      "source": "/api/leave-review",
-      "destination": "/api/leave-review.js"
     }
   ]
 }
