@@ -111,13 +111,27 @@ module.exports = async function handler(req, res) {
       const body = req.body || {};
       const name = String(body.name || "").trim();
       const phone = String(body.phone || "").trim();
+      const normalizedPhone = phone.replace(/[^0-9]/g, "");
       const note = String(body.note || "").trim();
 
-      if (!name) {
-        return res.status(400).json({ error: "Student name is required" });
+      if (!name || !phone) {
+        return res.status(400).json({ error: "Student name and phone are required" });
+      }
+      if (normalizedPhone.length < 8 || normalizedPhone.length > 15) {
+        return res.status(400).json({ error: "Invalid phone number" });
       }
       if (name.length > 50 || phone.length > 30 || note.length > 500) {
         return res.status(400).json({ error: "Input is too long" });
+      }
+
+      const duplicateResp = await fetch(
+        `${supabaseUrl}/rest/v1/students?normalized_phone=eq.${encodeURIComponent(normalizedPhone)}&select=id,name,phone&limit=1`,
+        { headers }
+      );
+      if (!duplicateResp.ok) throw new Error("Unable to check duplicate phone");
+      const duplicateRows = await duplicateResp.json();
+      if (duplicateRows[0]) {
+        return res.status(409).json({ error: `Phone already belongs to ${duplicateRows[0].name}`, existingStudentId: duplicateRows[0].id });
       }
 
       const createStudentResp = await fetch(

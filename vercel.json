@@ -24,6 +24,14 @@
     {
       "source": "/api/copilot",
       "destination": "/api/copilot.js"
+    },
+    {
+      "source": "/api/role-requests",
+      "destination": "/api/role-requests.js"
+    },
+    {
+      "source": "/api/role-request-review",
+      "destination": "/api/role-request-review.js"
     }
   ]
 }

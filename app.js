@@ -11,6 +11,8 @@ function setRoleUI(roles) {
 
   const isCoach = roles.includes("coach");
   const isManager = roles.includes("manager") || roles.includes("admin");
+  const requestBtn = document.getElementById("requestCoachRole");
+  requestBtn.classList.toggle("hidden",isCoach||isManager);
 
   roleSwitch.classList.add("hidden");
 
@@ -92,6 +94,7 @@ async function initLineAccount() {
     if (roles.includes("coach")) {
       await Promise.all([loadStudents(), loadDashboard()]);
     }
+    if (roles.includes("manager") || roles.includes("admin")) await loadRoleRequests();
 
     if (payload.created) {
       accountState.textContent = "系統帳號已建立｜目前尚未指派角色";
@@ -165,7 +168,7 @@ function render(filter="all"){
 
     el.innerHTML=`
       <div class="student-top">
-        <h4>${escapeHtml(s.name)}</h4>
+        <h4>${escapeHtml(s.name)}${s.phone?` <small>（${escapeHtml(s.phone.slice(-4))}）</small>`:""}</h4>
         <span class="${statusClass}">${statusLabel}</span>
       </div>
       <div class="student-meta">
@@ -306,8 +309,8 @@ saveStudentBtn.onclick=async()=>{
   const phone=document.getElementById("newStudentPhone").value.trim();
   const note=document.getElementById("newStudentNote").value.trim();
 
-  if(!name){
-    addStudentMessage.textContent="請輸入學員姓名。";
+  if(!name||!phone){
+    addStudentMessage.textContent="請輸入學員姓名與電話；電話用於辨識同名學員。";
     addStudentMessage.className="form-message error";
     return;
   }
@@ -346,7 +349,7 @@ saveStudentBtn.onclick=async()=>{
     setTimeout(()=>addStudentDialog.close(),450);
   }catch(error){
     console.error(error);
-    addStudentMessage.textContent="建立失敗，請稍後再試。";
+    addStudentMessage.textContent=error.message?.startsWith("Phone already belongs")?"此電話已建立學員資料，請勿重複新增。":"建立失敗，請稍後再試。";
     addStudentMessage.className="form-message error";
   }finally{
     saveStudentBtn.disabled=false;
@@ -398,3 +401,14 @@ document.getElementById("savePackageBtn").onclick=async()=>{
 };
 
 document.getElementById("exportBtn").onclick=()=>alert("MVP 下一步：可輸出 Excel / PDF 月報，或每日自動推送至主管 LINE。");
+
+document.getElementById("requestCoachRole").onclick=async()=>{
+ const btn=document.getElementById("requestCoachRole"); btn.disabled=true;
+ try{const d=await apiJson("/api/role-requests",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({role:"coach"})});btn.textContent=d.created?"申請已送出，等待主管核准":"申請審核中"}catch(e){btn.textContent=e.message==="Coach role already granted"?"已取得教練權限":"送出失敗，請稍後再試"}
+};
+async function loadRoleRequests(){
+ const box=document.getElementById("roleRequestList"); if(!box)return;
+ try{const d=await apiJson("/api/role-requests");box.innerHTML=d.requests.length?d.requests.map(x=>`<div class="approval-row"><div><b>${escapeHtml(x.display_name)}</b><span>申請教練權限｜${new Date(x.requested_at).toLocaleString("zh-TW")}</span></div><div><button class="primary" onclick="reviewRoleRequest('${x.id}',true)">核准</button><button class="secondary" onclick="reviewRoleRequest('${x.id}',false)">拒絕</button></div></div>`).join(""):"<div class=\"load-state empty\">目前沒有待審核申請。</div>"}catch(e){box.textContent="申請清單載入失敗。"}
+}
+window.reviewRoleRequest=async(id,approve)=>{if(!confirm(approve?"確定核准此教練權限？":"確定拒絕此申請？"))return;try{await apiJson("/api/role-request-review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requestId:id,approve})});await loadRoleRequests()}catch(e){alert("審核失敗，請重新整理後再試。")}};
+document.getElementById("refreshRoleRequests").onclick=loadRoleRequests;

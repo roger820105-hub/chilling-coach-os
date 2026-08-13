@@ -26,6 +26,7 @@
           <div>
             <div class="muted" id="lineGreeting">LINE 身分讀取中…</div>
             <div id="accountState" class="account-state">正在確認系統帳號…</div>
+            <button class="secondary hidden" id="requestCoachRole" type="button">申請教練權限</button>
             <h2>今天先處理最需要注意的學生</h2>
           </div>
           <button class="primary" id="addStudent">＋ 新增學員</button>
@@ -81,6 +82,11 @@
           <div class="card metric"><span>預估續約營收</span><strong>1.42M</strong><small>NTD</small></div>
         </div>
 
+        <div class="card approval-card">
+          <div class="section-head compact"><div><div class="eyebrow">ACCESS APPROVAL</div><h3>待審核教練申請</h3></div><button class="secondary" id="refreshRoleRequests" type="button">重新整理</button></div>
+          <div id="roleRequestList" class="approval-list"><div class="load-state">正在載入申請…</div></div>
+        </div>
+
         <div class="dashboard-grid">
           <div class="card">
             <div class="section-head compact"><div><div class="eyebrow">FORECAST</div><h3>教練續約預測</h3></div></div>
@@ -132,8 +138,8 @@
       <label class="field-label" for="newStudentName">學員姓名 *</label>
       <input id="newStudentName" class="text-input" type="text" maxlength="50" placeholder="例如：王小明" />
 
-      <label class="field-label" for="newStudentPhone">電話</label>
-      <input id="newStudentPhone" class="text-input" type="tel" maxlength="30" placeholder="選填" />
+      <label class="field-label" for="newStudentPhone">電話 *</label>
+      <input id="newStudentPhone" class="text-input" type="tel" maxlength="30" placeholder="必填，用來辨識同名學員" />
 
       <label class="field-label" for="newStudentNote">備註</label>
       <textarea id="newStudentNote" class="text-input textarea-input" maxlength="500" placeholder="選填，例如：初次體驗、訓練目標等"></textarea>
