@@ -16,7 +16,8 @@ async function rows(url,headers,path,options={}){
   const r=await fetch(`${url}/rest/v1/${path}`,{...options,headers:{...headers,...options.headers}});
   if(!r.ok) throw new Error(`${path}: ${await r.text()}`);
   if(r.status===204)return [];
-  return r.json();
+  const text=await r.text();
+  return text?JSON.parse(text):[];
 }
 async function context(req,allowed=[]){
   const {url,headers}=config(), profile=await lineProfile(req);
