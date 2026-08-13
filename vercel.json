@@ -40,6 +40,14 @@
     {
       "source": "/api/training-plans",
       "destination": "/api/training-plans.js"
+    },
+    {
+      "source": "/api/operations",
+      "destination": "/api/operations.js"
+    },
+    {
+      "source": "/api/leave-review",
+      "destination": "/api/leave-review.js"
     }
   ]
 }

@@ -76,10 +76,15 @@
         </div>
 
         <div class="kpis four">
-          <div class="card metric"><span>PT 學員</span><strong>143</strong><small>人</small></div>
-          <div class="card metric"><span>進入續約週期</span><strong>38</strong><small>人</small></div>
-          <div class="card metric"><span>預估續約率</span><strong>71%</strong><small>+4.2%</small></div>
-          <div class="card metric"><span>預估續約營收</span><strong>1.42M</strong><small>NTD</small></div>
+          <div class="card metric"><span>本月確認業績</span><strong id="opsSales">—</strong><small>NTD</small></div>
+          <div class="card metric"><span>本月團課</span><strong id="opsClasses">—</strong><small>堂</small></div>
+          <div class="card metric"><span>本月工時</span><strong id="opsHours">—</strong><small>小時</small></div>
+          <div class="card metric risk"><span>待審核請假</span><strong id="opsLeaves">—</strong><small>件</small></div>
+        </div>
+
+        <div class="card approval-card">
+          <div class="section-head compact"><div><div class="eyebrow">LEAVE APPROVAL</div><h3>待審核請假</h3></div><button class="secondary" id="refreshOperations" type="button">重新整理</button></div>
+          <div id="leaveRequestList" class="approval-list"><div class="load-state">正在載入營運資料…</div></div>
         </div>
 
         <div class="card approval-card">
@@ -93,12 +98,7 @@
             <div class="table-wrap">
               <table>
                 <thead><tr><th>教練</th><th>學員</th><th>本月續約率</th><th>下月到期</th><th>預估續約</th><th>預估營收</th></tr></thead>
-                <tbody>
-                  <tr><td>Roger</td><td>18</td><td><span class="pill good">78%</span></td><td>5</td><td>4.0</td><td>200K</td></tr>
-                  <tr><td>Leo</td><td>24</td><td><span class="pill mid">72%</span></td><td>8</td><td>5.8</td><td>290K</td></tr>
-                  <tr><td>Mia</td><td>18</td><td><span class="pill warn">61%</span></td><td>5</td><td>3.1</td><td>155K</td></tr>
-                  <tr><td>Ken</td><td>27</td><td><span class="pill good">83%</span></td><td>10</td><td>8.3</td><td>415K</td></tr>
-                </tbody>
+                <tbody><tr><td colspan="6">尚未提供續約計算規則，因此不顯示推測數字。</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -106,9 +106,9 @@
           <div class="card insight">
             <div class="eyebrow">AI INSIGHT</div>
             <h3>本月應優先處理</h3>
-            <p><b>Mia 教練續約率偏低</b>，但問題不完全來自成交能力。</p>
-            <p>目前有 4 位學員近 4 週上課頻率下降超過 30%，預計會把續約時點延後。</p>
-            <div class="callout">建議：先追蹤出席與排課狀況，再判斷是否需要銷售輔導。</div>
+            <p><b>營運資料接口已啟用。</b></p>
+            <p id="opsAdapterState">Google Sheets 與薪資規則尚未啟用，等待實際欄位與規則。</p>
+            <div class="callout">系統不會臆造續約、薪資或會計數字。</div>
           </div>
         </div>
 

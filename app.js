@@ -96,7 +96,7 @@ async function initLineAccount() {
     if (roles.includes("coach")) {
       await Promise.all([loadStudents(), loadDashboard()]);
     }
-    if (roles.includes("manager") || roles.includes("admin")) await loadRoleRequests();
+    if (roles.includes("manager") || roles.includes("admin")) await Promise.all([loadRoleRequests(),loadOperations()]);
 
     if (payload.created) {
       accountState.textContent = "系統帳號已建立｜目前尚未指派角色";
@@ -423,6 +423,17 @@ async function loadRoleRequests(){
 }
 window.reviewRoleRequest=async(id,approve)=>{if(!confirm(approve?"確定核准此教練權限？":"確定拒絕此申請？"))return;try{await apiJson("/api/role-request-review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requestId:id,approve})});await loadRoleRequests()}catch(e){alert("審核失敗，請重新整理後再試。")}};
 document.getElementById("refreshRoleRequests").onclick=loadRoleRequests;
+
+async function loadOperations(){
+ const box=document.getElementById("leaveRequestList"); if(!box)return;
+ try{const d=await apiJson("/api/operations"),m=d.metrics;
+  document.getElementById("opsSales").textContent=Number(m.monthlySales).toLocaleString("zh-TW");document.getElementById("opsClasses").textContent=m.groupClasses;document.getElementById("opsHours").textContent=m.workHours;document.getElementById("opsLeaves").textContent=m.pendingLeaves;
+  document.getElementById("opsAdapterState").textContent=m.activeAdapters?`已有 ${m.activeAdapters} 個營運資料介面啟用。`:`Google Sheets 與薪資規則尚未啟用，等待實際欄位與規則。`;
+  box.innerHTML=d.leaves.length?d.leaves.map(x=>`<div class="approval-row"><div><b>${escapeHtml(x.display_name)}｜${escapeHtml(x.leave_type)}</b><span>${new Date(x.starts_at).toLocaleString("zh-TW")} ～ ${new Date(x.ends_at).toLocaleString("zh-TW")}${x.reason?`<br>${escapeHtml(x.reason)}`:""}</span></div><div><button class="primary" onclick="reviewLeave('${x.id}',true)">核准</button><button class="secondary" onclick="reviewLeave('${x.id}',false)">拒絕</button></div></div>`).join(""):`<div class="load-state empty">目前沒有待審核請假。</div>`;
+ }catch(e){box.textContent="營運資料載入失敗。"}
+}
+window.reviewLeave=async(id,approve)=>{if(!confirm(approve?"確定核准此請假？":"確定拒絕此請假？"))return;try{await apiJson("/api/leave-review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requestId:id,approve})});await loadOperations()}catch(e){alert("審核失敗，請重新整理後再試。")}};
+document.getElementById("refreshOperations").onclick=loadOperations;
 
 const trainingPlanDialog=document.getElementById("trainingPlanDialog"),trainingPlanContent=document.getElementById("trainingPlanContent");
 document.getElementById("closeTrainingPlanDialog").onclick=()=>trainingPlanDialog.close();
