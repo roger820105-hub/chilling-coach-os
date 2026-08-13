@@ -144,7 +144,7 @@ async function getStudents(url, secret, coachId) {
   const s = await fetch(
     `${url}/rest/v1/students?id=in.(${encodeURIComponent(
       filter
-    )})&select=id,name,status&order=name.asc`,
+    )})&select=id,name,phone,status&order=name.asc`,
     { headers: h }
   );
 
@@ -167,12 +167,20 @@ async function findStudent(
     coachId
   );
 
-  const q = name.trim().toLowerCase();
+  const raw = name.trim();
+  const selector = raw.match(/^(.+?)\s+(\d{4})$/);
+  const requestedName = (selector ? selector[1] : raw).trim();
+  const phoneSuffix = selector?.[2] || null;
+  const q = requestedName.toLowerCase();
 
-  const exact = all.filter(
+  let exact = all.filter(
     (s) =>
       s.name.trim().toLowerCase() === q
   );
+
+  if (phoneSuffix) {
+    exact = exact.filter(s => String(s.phone || "").replace(/[^0-9]/g, "").endsWith(phoneSuffix));
+  }
 
   if (exact.length === 1) {
     return {
@@ -184,12 +192,17 @@ async function findStudent(
   if (exact.length > 1) {
     return {
       status: "multiple",
+      candidates: exact,
     };
   }
 
-  const partial = all.filter((s) =>
+  let partial = all.filter((s) =>
     s.name.toLowerCase().includes(q)
   );
+
+  if (phoneSuffix) {
+    partial = partial.filter(s => String(s.phone || "").replace(/[^0-9]/g, "").endsWith(phoneSuffix));
+  }
 
   if (partial.length === 1) {
     return {
@@ -201,12 +214,54 @@ async function findStudent(
   if (partial.length > 1) {
     return {
       status: "multiple",
+      candidates: partial,
     };
   }
 
   return {
     status: "not_found",
   };
+}
+
+function studentLookupMessage(found, input) {
+  if (found.status === "not_found") return `找不到你的學員「${String(input).trim()}」。`;
+  if (found.status === "multiple") {
+    const list = (found.candidates || []).map((x, i) => {
+      const digits = String(x.phone || "").replace(/[^0-9]/g, "");
+      return `${i + 1}. ${x.name}（${digits ? digits.slice(-4) : "無電話"}）`;
+    }).join("\n");
+    const example = found.candidates?.[0];
+    const suffix = String(example?.phone || "").replace(/[^0-9]/g, "").slice(-4);
+    return `找到多位符合的學員：\n${list}\n\n請在姓名後加電話末四碼，例如：${example?.name || "王小明"}${suffix ? ` ${suffix}` : ""} 身體數據`;
+  }
+  return null;
+}
+
+async function getBodyMeasurements(url, secret, studentId, limit = 12) {
+  const r = await fetch(`${url}/rest/v1/body_measurements?student_id=eq.${encodeURIComponent(studentId)}&select=measured_at,weight_kg,body_fat_pct,muscle_mass_kg,waist_cm,hip_cm,chest_cm,note&order=measured_at.desc&limit=${limit}`, { headers: dbHeaders(secret) });
+  if (!r.ok) throw new Error(`BODY_MEASUREMENTS:${await r.text()}`);
+  return r.json();
+}
+
+async function addBodyMeasurement(url, secret, studentId, coachId, values) {
+  const payload = { student_id: studentId, measured_at: new Date().toISOString(), source: "line_bot", recorded_by: coachId, ...values };
+  const r = await fetch(`${url}/rest/v1/body_measurements`, { method: "POST", headers: { ...dbHeaders(secret), Prefer: "return=representation" }, body: JSON.stringify(payload) });
+  if (!r.ok) throw new Error(`ADD_BODY_MEASUREMENT:${await r.text()}`);
+  const row = (await r.json())[0];
+  await fetch(`${url}/rest/v1/rpc/write_audit_log`, { method: "POST", headers: dbHeaders(secret), body: JSON.stringify({ p_actor: coachId, p_action: "create", p_entity_type: "body_measurement", p_entity_id: row.id, p_source: "line_bot", p_after: row }) });
+  return row;
+}
+
+async function getLatestAssessment(url, secret, studentId) {
+  const r = await fetch(`${url}/rest/v1/student_assessments?student_id=eq.${encodeURIComponent(studentId)}&select=assessment_type,assessed_at,results,injuries,limitations,note&order=assessed_at.desc&limit=1`, { headers: dbHeaders(secret) });
+  if (!r.ok) throw new Error(`ASSESSMENT:${await r.text()}`);
+  return (await r.json())[0] || null;
+}
+
+async function getStudentGoals(url, secret, studentId) {
+  const r = await fetch(`${url}/rest/v1/student_goals?student_id=eq.${encodeURIComponent(studentId)}&status=eq.active&select=title,description,target_value,unit,target_date&order=created_at.desc`, { headers: dbHeaders(secret) });
+  if (!r.ok) throw new Error(`GOALS:${await r.text()}`);
+  return r.json();
 }
 
 function buildStudentMap(students) {
@@ -1564,6 +1619,13 @@ function help() {
     "【學員】",
     "・王小明 狀態",
     "・王小明剩幾堂",
+    "・王小明 身體數據",
+    "・王小明 身體變化",
+    "・王小明 最近一次評估",
+    "・王小明 目標",
+    "・王小明 體重 70.5",
+    "・王小明 體脂 18.2",
+    "※ 同名時：王小明 5678 身體數據",
     "",
     "【預約／完成】",
     "・8/15 15:00 王小明 預約上課",
@@ -1660,6 +1722,55 @@ async function handleCommand(
         .join("\n")
     );
   }
+
+  /* =====================================================
+     V12 — HEALTH / ASSESSMENT / GOALS
+     ===================================================== */
+
+  const quickHealth = s.match(/^(.+?)\s+(體重|體脂|肌肉量|腰圍|臀圍|胸圍)\s+(\d+(?:\.\d+)?)\s*(?:kg|公斤|%|％|cm|公分)?$/i);
+  if (quickHealth) {
+    const found = await findStudent(url, secret, user.id, quickHealth[1]);
+    if (found.status !== "ok") return studentLookupMessage(found, quickHealth[1]);
+    const value = Number(quickHealth[3]), fields = { 體重: "weight_kg", 體脂: "body_fat_pct", 肌肉量: "muscle_mass_kg", 腰圍: "waist_cm", 臀圍: "hip_cm", 胸圍: "chest_cm" };
+    if (value <= 0 || (quickHealth[2] === "體脂" && value > 100)) return "數值格式不正確，請重新輸入。";
+    await addBodyMeasurement(url, secret, found.student.id, user.id, { [fields[quickHealth[2]]]: value });
+    const unit = quickHealth[2] === "體脂" ? "%" : quickHealth[2].includes("圍") ? "cm" : "kg";
+    return `✅ 已記錄 ${found.student.name}\n${quickHealth[2]}：${value}${unit}`;
+  }
+
+  const healthBlock = s.match(/^(.+?)\s+身體數據\s*\n([\s\S]+)$/);
+  if (healthBlock) {
+    const found = await findStudent(url, secret, user.id, healthBlock[1]);
+    if (found.status !== "ok") return studentLookupMessage(found, healthBlock[1]);
+    const values = {}, fields = { 體重: "weight_kg", 體脂: "body_fat_pct", 肌肉量: "muscle_mass_kg", 腰圍: "waist_cm", 臀圍: "hip_cm", 胸圍: "chest_cm" };
+    for (const line of healthBlock[2].split(/\r?\n/)) { const m=line.trim().match(/^(體重|體脂|肌肉量|腰圍|臀圍|胸圍)\s+(\d+(?:\.\d+)?)/); if(m)values[fields[m[1]]]=Number(m[2]); }
+    if (!Object.keys(values).length) return "找不到可記錄的身體數據。請輸入體重、體脂、肌肉量或圍度。";
+    await addBodyMeasurement(url, secret, found.student.id, user.id, values);
+    return `✅ 已記錄 ${found.student.name} 的身體數據\n${Object.entries(values).map(([k,v])=>`${({weight_kg:"體重",body_fat_pct:"體脂",muscle_mass_kg:"肌肉量",waist_cm:"腰圍",hip_cm:"臀圍",chest_cm:"胸圍"})[k]}：${v}`).join("\n")}`;
+  }
+
+  const healthQuery = s.match(/^(.+?)\s+(身體數據|最近一次InBody|最近一次 InBody|InBody)$/i);
+  if (healthQuery) {
+    const found = await findStudent(url, secret, user.id, healthQuery[1]);
+    if (found.status !== "ok") return studentLookupMessage(found, healthQuery[1]);
+    const records = await getBodyMeasurements(url, secret, found.student.id, 1), x=records[0];
+    if(!x)return `${found.student.name} 尚無身體數據。`;
+    return `📋 ${found.student.name}｜最近身體數據\n日期：${formatTaiwanDate(x.measured_at)}\n體重：${x.weight_kg??"—"} kg\n體脂：${x.body_fat_pct??"—"}%\n肌肉量：${x.muscle_mass_kg??"—"} kg\n腰圍：${x.waist_cm??"—"} cm\n臀圍：${x.hip_cm??"—"} cm\n胸圍：${x.chest_cm??"—"} cm`;
+  }
+
+  const changeQuery = s.match(/^(.+?)\s+(身體變化|體態變化)$/);
+  if(changeQuery){
+    const found=await findStudent(url,secret,user.id,changeQuery[1]); if(found.status!=="ok")return studentLookupMessage(found,changeQuery[1]);
+    const records=(await getBodyMeasurements(url,secret,found.student.id,20)).reverse(); if(records.length<2)return `${found.student.name} 目前只有 ${records.length} 筆身體數據，至少需要 2 筆才能比較。`;
+    const first=records[0],last=records.at(-1),diff=(a,b,unit)=>a==null||b==null?"—":`${b-a>=0?"+":""}${formatNumber(Number(b)-Number(a))}${unit}`;
+    return `📈 ${found.student.name}｜身體變化\n期間：${formatTaiwanDate(first.measured_at)} → ${formatTaiwanDate(last.measured_at)}\n體重：${diff(first.weight_kg,last.weight_kg," kg")}\n體脂：${diff(first.body_fat_pct,last.body_fat_pct,"%")}\n肌肉量：${diff(first.muscle_mass_kg,last.muscle_mass_kg," kg")}\n腰圍：${diff(first.waist_cm,last.waist_cm," cm")}`;
+  }
+
+  const assessmentQuery=s.match(/^(.+?)\s+(?:最近一次評估|最近評估|評估)$/);
+  if(assessmentQuery){const found=await findStudent(url,secret,user.id,assessmentQuery[1]);if(found.status!=="ok")return studentLookupMessage(found,assessmentQuery[1]);const x=await getLatestAssessment(url,secret,found.student.id);if(!x)return `${found.student.name} 尚無評估紀錄。`;return `📝 ${found.student.name}｜最近評估\n日期：${formatTaiwanDate(x.assessed_at)}\n類型：${x.assessment_type}\n摘要：${x.results?.summary||"—"}\n傷病：${x.injuries||"—"}\n限制：${x.limitations||"—"}\n備註：${x.note||"—"}`;}
+
+  const goalQuery=s.match(/^(.+?)\s+(?:目標|會員目標)$/);
+  if(goalQuery){const found=await findStudent(url,secret,user.id,goalQuery[1]);if(found.status!=="ok")return studentLookupMessage(found,goalQuery[1]);const goals=await getStudentGoals(url,secret,found.student.id);if(!goals.length)return `${found.student.name} 目前沒有進行中的目標。`;return `🎯 ${found.student.name}｜會員目標\n${goals.map((x,i)=>`${i+1}. ${x.title}${x.target_value!=null?`｜${x.target_value}${x.unit||""}`:""}${x.target_date?`｜期限 ${x.target_date}`:""}`).join("\n")}`;}
 
   /* =====================================================
      V6 — TODAY SCHEDULE
