@@ -81,21 +81,23 @@ module.exports=async function(req,res){
    return res.json({metrics:{monthHours:Number(hours.toFixed(1)),overtimeHours:Number(overtimeHours.toFixed(1)),clockedIn:!!open},openWorkLog:open,shifts,leaves});
   }
   if(!isManager)return res.status(403).json({error:"Manager role required"});
-  const [sales,classes,attendance,workLogs,shifts,leaves,exports,adapters]=await Promise.all([
+  const [sales,classes,attendance,workLogs,shifts,leaves,monthLeaves,exports,adapters]=await Promise.all([
    rows(c.url,c.headers,`sales_records?occurred_on=gte.${monthStart}&status=eq.confirmed&select=amount`),
    rows(c.url,c.headers,`group_classes?starts_at=gte.${monthStart}T00:00:00%2B08:00&select=id,status,capacity`),
    rows(c.url,c.headers,"group_class_attendance?select=group_class_id,status,fee"),
-   rows(c.url,c.headers,`work_logs?started_at=gte.${monthStart}T00:00:00%2B08:00&select=started_at,ended_at,break_minutes,credited_hours,category,status`),
+   rows(c.url,c.headers,`work_logs?started_at=gte.${monthStart}T00:00:00%2B08:00&select=user_id,started_at,ended_at,break_minutes,credited_hours,category,status`),
    rows(c.url,c.headers,`shifts?starts_at=gte.${today}T00:00:00%2B08:00&starts_at=lt.${today}T23:59:59%2B08:00&select=id,status`),
    rows(c.url,c.headers,"leave_requests?status=eq.pending&select=id,user_id,leave_type,starts_at,ends_at,reason,created_at&order=created_at.asc"),
+   rows(c.url,c.headers,`leave_requests?starts_at=gte.${monthStart}T00:00:00%2B08:00&status=eq.approved&select=user_id,requested_hours,starts_at,ends_at`),
    rows(c.url,c.headers,"accounting_exports?select=id,status&order=created_at.desc&limit=50"),
    rows(c.url,c.headers,"integration_adapters?select=id,is_active")
   ]);
-  const userIds=[...new Set(leaves.map(x=>x.user_id))]; let users=[];
+  const userIds=[...new Set([...leaves,...monthLeaves,...workLogs].map(x=>x.user_id))]; let users=[];
   if(userIds.length)users=await rows(c.url,c.headers,`users?id=in.(${userIds.map(encodeURIComponent).join(",")})&select=id,display_name`);
   const names=Object.fromEntries(users.map(x=>[x.id,x.display_name]));
   const overtimeHours=workLogs.filter(x=>x.category==="overtime").reduce((s,x)=>s+Number(x.credited_hours||0),0),hours=workLogs.filter(x=>x.category!=="overtime").reduce((sum,x)=>x.ended_at?sum+Math.max(0,(new Date(x.ended_at)-new Date(x.started_at))/3600000-(x.break_minutes||0)/60):sum,0);
   const attended=attendance.filter(x=>["attended","checked_in","completed"].includes(x.status)).length;
-  res.json({metrics:{monthlySales:sales.reduce((s,x)=>s+Number(x.amount||0),0),groupClasses:classes.length,groupAttendance:attended,workHours:Number(hours.toFixed(1)),overtimeHours:Number(overtimeHours.toFixed(1)),todayShifts:shifts.length,pendingLeaves:leaves.length,pendingExports:exports.filter(x=>x.status!=="completed").length,activeAdapters:adapters.filter(x=>x.is_active).length},leaves:leaves.map(x=>({...x,display_name:names[x.user_id]||"使用者"}))});
+  const staff=userIds.map(id=>{const logs=workLogs.filter(x=>x.user_id===id),regular=logs.filter(x=>x.category!=="overtime").reduce((s,x)=>x.ended_at?s+Math.max(0,(new Date(x.ended_at)-new Date(x.started_at))/3600000-(x.break_minutes||0)/60):s,0),overtime=logs.filter(x=>x.category==="overtime").reduce((s,x)=>s+Number(x.credited_hours||0),0),leaveHours=monthLeaves.filter(x=>x.user_id===id).reduce((s,x)=>s+Number(x.requested_hours??Math.max(0,(new Date(x.ends_at)-new Date(x.starts_at))/3600000)),0);return{user_id:id,display_name:names[id]||"使用者",work_hours:Number(regular.toFixed(1)),overtime_hours:Number(overtime.toFixed(1)),leave_hours:Number(leaveHours.toFixed(1))}}).sort((a,b)=>a.display_name.localeCompare(b.display_name,"zh-Hant"));
+  res.json({period:today.slice(0,7),metrics:{monthlySales:sales.reduce((s,x)=>s+Number(x.amount||0),0),groupClasses:classes.length,groupAttendance:attended,workHours:Number(hours.toFixed(1)),overtimeHours:Number(overtimeHours.toFixed(1)),todayShifts:shifts.length,pendingLeaves:leaves.length,pendingExports:exports.filter(x=>x.status!=="completed").length,activeAdapters:adapters.filter(x=>x.is_active).length},staff,leaves:leaves.map(x=>({...x,display_name:names[x.user_id]||"使用者"}))});
  }catch(e){if(req.body?.action==="google_shift_sync"&&validSyncSecret(req))return res.status(500).json({error:String(e.message||e).slice(0,1200)});return fail(res,e)}
 };

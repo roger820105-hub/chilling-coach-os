@@ -411,7 +411,9 @@ document.getElementById("savePackageBtn").onclick=async()=>{
   }catch(e){console.error(e);packageMessage.textContent="建立失敗，請稍後再試。";packageMessage.className="form-message error";}
 };
 
-document.getElementById("exportBtn").onclick=()=>alert("MVP 下一步：可輸出 Excel / PDF 月報，或每日自動推送至主管 LINE。");
+let latestOperations=null;
+function csvCell(value){return `"${String(value??"").replace(/"/g,'""')}"`}
+document.getElementById("exportBtn").onclick=()=>{if(!latestOperations)return alert("營運資料尚未載入完成。");const m=latestOperations.metrics,lines=[["月份",latestOperations.period],["本月確認業績",m.monthlySales],["本月團課",m.groupClasses],["本月一般工時",m.workHours],["本月加班時數",m.overtimeHours],[],["員工","一般工時","加班時數","核准請假時數"],...latestOperations.staff.map(x=>[x.display_name,x.work_hours,x.overtime_hours,x.leave_hours])],csv="\uFEFF"+lines.map(r=>r.map(csvCell).join(",")).join("\r\n"),a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download=`Chilling-Coach-OS-${latestOperations.period}-月報.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
 
 document.getElementById("requestCoachRole").onclick=async()=>{
  const btn=document.getElementById("requestCoachRole"); btn.disabled=true;
@@ -427,8 +429,10 @@ document.getElementById("refreshRoleRequests").onclick=loadRoleRequests;
 async function loadOperations(){
  const box=document.getElementById("leaveRequestList"); if(!box)return;
  try{const d=await apiJson("/api/operations"),m=d.metrics;
+  latestOperations=d;
   document.getElementById("opsSales").textContent=Number(m.monthlySales).toLocaleString("zh-TW");document.getElementById("opsClasses").textContent=m.groupClasses;document.getElementById("opsHours").textContent=m.workHours;document.getElementById("opsOvertime").textContent=m.overtimeHours;document.getElementById("opsLeaves").textContent=m.pendingLeaves;
   document.getElementById("opsAdapterState").textContent=m.activeAdapters?`已有 ${m.activeAdapters} 個營運資料介面啟用。`:`Google Sheets 與薪資規則尚未啟用，等待實際欄位與規則。`;
+  document.getElementById("staffMonthlyRows").innerHTML=d.staff.length?d.staff.map(x=>`<tr><td><b>${escapeHtml(x.display_name)}</b></td><td>${x.work_hours} 小時</td><td>${x.overtime_hours} 小時</td><td>${x.leave_hours} 小時</td></tr>`).join(""):`<tr><td colspan="4">本月尚無已配對員工資料。</td></tr>`;
   box.innerHTML=d.leaves.length?d.leaves.map(x=>`<div class="approval-row"><div><b>${escapeHtml(x.display_name)}｜${escapeHtml(x.leave_type)}</b><span>${new Date(x.starts_at).toLocaleString("zh-TW")} ～ ${new Date(x.ends_at).toLocaleString("zh-TW")}${x.reason?`<br>${escapeHtml(x.reason)}`:""}</span></div><div><button class="primary" onclick="reviewLeave('${x.id}',true)">核准</button><button class="secondary" onclick="reviewLeave('${x.id}',false)">拒絕</button></div></div>`).join(""):`<div class="load-state empty">目前沒有待審核請假。</div>`;
  }catch(e){box.textContent="營運資料載入失敗。"}
 }
