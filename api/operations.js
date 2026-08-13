@@ -46,7 +46,7 @@ module.exports=async function(req,res){
   if(req.query?.scope==="sheet_mappings"){
    if(!isManager)return res.status(403).json({error:"Manager role required"});
    const [roleRows,mappings]=await Promise.all([rows(c.url,c.headers,"user_roles?role=eq.coach&select=user_id"),rows(c.url,c.headers,"staff_external_mappings?provider=eq.google_sheets&select=external_key,user_id")]),ids=[...new Set(roleRows.map(x=>x.user_id))];let users=[];
-   if(ids.length)users=await rows(c.url,c.headers,`users?id=in.(${encodeURIComponent(ids.map(x=>`\"${x}\"`).join(","))})&is_active=eq.true&select=id,display_name&order=display_name.asc`);
+   if(ids.length)users=await rows(c.url,c.headers,`users?id=in.(${ids.map(encodeURIComponent).join(",")})&is_active=eq.true&select=id,display_name&order=display_name.asc`);
    return res.json({sheetNames:["李星儀","賴建豪","謝雅婷","楷傑","珞軒","巧琳","羅傑"],users,mappings});
   }
   if(req.query?.scope==="me"){
@@ -70,7 +70,7 @@ module.exports=async function(req,res){
    rows(c.url,c.headers,"integration_adapters?select=id,is_active")
   ]);
   const userIds=[...new Set(leaves.map(x=>x.user_id))]; let users=[];
-  if(userIds.length)users=await rows(c.url,c.headers,`users?id=in.(${encodeURIComponent(userIds.map(x=>`\"${x}\"`).join(","))})&select=id,display_name`);
+  if(userIds.length)users=await rows(c.url,c.headers,`users?id=in.(${userIds.map(encodeURIComponent).join(",")})&select=id,display_name`);
   const names=Object.fromEntries(users.map(x=>[x.id,x.display_name]));
   const hours=workLogs.reduce((sum,x)=>x.ended_at?sum+Math.max(0,(new Date(x.ended_at)-new Date(x.started_at))/3600000-(x.break_minutes||0)/60):sum,0);
   const attended=attendance.filter(x=>["attended","checked_in","completed"].includes(x.status)).length;
