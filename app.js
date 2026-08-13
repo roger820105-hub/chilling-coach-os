@@ -1,6 +1,8 @@
 
 // ===== LINE MINI App / V3 secure account bootstrap =====
-const LIFF_ID = "2011008227-7rnEFNrI";
+// Production uses the Published LINE MINI App channel. The Developing channel
+// is limited to users explicitly enrolled as LINE Developers testers.
+const LIFF_ID = "2011008229-HzPkUq3C";
 
 function setRoleUI(roles) {
   const coachBtn = document.getElementById("coachBtn");
