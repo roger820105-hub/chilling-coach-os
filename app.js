@@ -96,7 +96,7 @@ async function initLineAccount() {
     if (roles.includes("coach")) {
       await Promise.all([loadStudents(), loadDashboard(),loadMyOperations()]);
     }
-    if (roles.includes("manager") || roles.includes("admin")) await Promise.all([loadRoleRequests(),loadOperations()]);
+    if (roles.includes("manager") || roles.includes("admin")) await Promise.all([loadRoleRequests(),loadOperations(),loadSheetMappings()]);
 
     if (payload.created) {
       accountState.textContent = "系統帳號已建立｜目前尚未指派角色";
@@ -434,6 +434,9 @@ async function loadOperations(){
 }
 window.reviewLeave=async(id,approve)=>{if(!confirm(approve?"確定核准此請假？":"確定拒絕此請假？"))return;try{await apiJson("/api/operations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requestId:id,approve})});await loadOperations()}catch(e){alert("審核失敗，請重新整理後再試。")}};
 document.getElementById("refreshOperations").onclick=loadOperations;
+
+async function loadSheetMappings(){const box=document.getElementById("sheetMappingList");if(!box)return;try{const d=await apiJson("/api/operations?scope=sheet_mappings"),mapped=Object.fromEntries(d.mappings.map(x=>[x.external_key,x.user_id]));box.innerHTML=d.sheetNames.map((name,i)=>`<div class="mapping-row"><b>${escapeHtml(name)}</b><select class="text-input" id="sheetMap${i}"><option value="">尚未配對</option>${d.users.map(u=>`<option value="${u.id}" ${mapped[name]===u.id?"selected":""}>${escapeHtml(u.display_name)}</option>`).join("")}</select><button class="secondary" onclick="saveSheetMapping('${escapeHtml(name)}','sheetMap${i}')">儲存</button></div>`).join("")}catch(e){box.textContent="姓名配對資料載入失敗。"}}
+window.saveSheetMapping=async(name,selectId)=>{const userId=document.getElementById(selectId).value;if(!userId)return alert("請先選擇 LINE 教練帳號。");try{await apiJson("/api/operations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"map_sheet_staff",externalName:name,userId})});alert("配對已儲存。")}catch(e){alert("配對儲存失敗。")}};document.getElementById("refreshSheetMappings").onclick=loadSheetMappings;
 
 const leaveDialog=document.getElementById("leaveDialog");
 const statusLabels={pending:"審核中",approved:"已核准",rejected:"已拒絕",cancelled:"已取消"};

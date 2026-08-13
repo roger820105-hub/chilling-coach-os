@@ -1,7 +1,20 @@
-const {context,rows,fail}=require("./_lib");
+const crypto=require("node:crypto"),{config,context,rows,fail}=require("./_lib");
+
+function validSyncSecret(req){const expected=process.env.GOOGLE_SHEETS_SYNC_SECRET||"",actual=String(req.headers["x-sync-secret"]||"");if(!expected||!actual)return false;const a=Buffer.from(expected),b=Buffer.from(actual);return a.length===b.length&&crypto.timingSafeEqual(a,b)}
+
+async function googleShiftSync(req,res){
+ if(!validSyncSecret(req))return res.status(401).json({error:"Invalid sync secret"});
+ const {url,headers}=config(),sheet=String(req.body?.spreadsheetId||""),input=Array.isArray(req.body?.shifts)?req.body.shifts.slice(0,1000):[];
+ if(sheet!=="1uVuYJvA7fucbMAznqVZnggHqZ3HGaV1WzMoO_2ytWH0")return res.status(400).json({error:"Unexpected spreadsheet"});
+ const mappings=await rows(url,headers,"staff_external_mappings?provider=eq.google_sheets&select=external_key,user_id"),map=Object.fromEntries(mappings.map(x=>[x.external_key,x.user_id])),unmatched=[...new Set(input.map(x=>String(x.employee||"").trim()).filter(x=>x&&!map[x]))],payload=[];
+ for(const x of input){const employee=String(x.employee||"").trim(),code=String(x.shiftCode||"").trim(),date=String(x.date||""),start=String(x.start||""),end=String(x.end||"");if(!map[employee]||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^\d{2}:\d{2}$/.test(start)||!/^\d{2}:\d{2}$/.test(end))continue;let ends=date;if(end<=start){const d=new Date(`${date}T00:00:00+08:00`);d.setDate(d.getDate()+1);ends=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Taipei"}).format(d)}payload.push({user_id:map[employee],starts_at:`${date}T${start}:00+08:00`,ends_at:`${ends}T${end}:00+08:00`,status:"scheduled",external_source:"google_sheets",external_ref:`${sheet}:${employee}:${date}`,note:`Google Sheet 班別 ${code}`})}
+ if(payload.length)await rows(url,headers,"shifts?on_conflict=external_source,external_ref",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(payload)});
+ return res.json({received:input.length,imported:payload.length,unmatched});
+}
 
 module.exports=async function(req,res){
  try{
+  if(req.method==="POST"&&req.body?.action==="google_shift_sync")return googleShiftSync(req,res);
   const c=await context(req,["coach","manager","admin"]), isManager=c.roles.some(x=>["manager","admin"].includes(x));
   if(req.method==="POST"){
    const action=String(req.body?.action||"");
@@ -16,6 +29,11 @@ module.exports=async function(req,res){
     await rows(c.url,c.headers,"rpc/write_audit_log",{method:"POST",body:JSON.stringify({p_actor:c.user.id,p_action:"request",p_entity_type:"leave_request",p_entity_id:created[0].id,p_source:"mini_app",p_after:created[0]})});
     return res.json({leave:created[0]});
    }
+   if(action==="map_sheet_staff"){
+    if(!isManager)return res.status(403).json({error:"Manager role required"});
+    const name=String(req.body?.externalName||"").trim().slice(0,80),userId=String(req.body?.userId||"");if(!name||!/^[0-9a-f-]{36}$/i.test(userId))return res.status(400).json({error:"Invalid mapping"});
+    await rows(c.url,c.headers,"staff_external_mappings?on_conflict=provider,external_key",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({provider:"google_sheets",external_key:name,user_id:userId,created_by:c.user.id})});return res.json({ok:true});
+   }
    if(!isManager)return res.status(403).json({error:"Manager role required"});
    const id=String(req.body?.requestId||""), approve=req.body?.approve===true;
    if(!/^[0-9a-f-]{36}$/i.test(id))return res.status(400).json({error:"Invalid request"});
@@ -25,6 +43,12 @@ module.exports=async function(req,res){
   if(req.method!=="GET")return res.status(405).json({error:"Method not allowed"});
   const today=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Taipei"}).format(new Date());
   const monthStart=`${today.slice(0,7)}-01`;
+  if(req.query?.scope==="sheet_mappings"){
+   if(!isManager)return res.status(403).json({error:"Manager role required"});
+   const [roleRows,mappings]=await Promise.all([rows(c.url,c.headers,"user_roles?role=eq.coach&select=user_id"),rows(c.url,c.headers,"staff_external_mappings?provider=eq.google_sheets&select=external_key,user_id")]),ids=[...new Set(roleRows.map(x=>x.user_id))];let users=[];
+   if(ids.length)users=await rows(c.url,c.headers,`users?id=in.(${encodeURIComponent(ids.map(x=>`\"${x}\"`).join(","))})&is_active=eq.true&select=id,display_name&order=display_name.asc`);
+   return res.json({sheetNames:["李星儀","賴建豪","謝雅婷","楷傑","珞軒","巧琳","羅傑"],users,mappings});
+  }
   if(req.query?.scope==="me"){
    const [workLogs,shifts,leaves]=await Promise.all([
     rows(c.url,c.headers,`work_logs?user_id=eq.${c.user.id}&started_at=gte.${monthStart}T00:00:00%2B08:00&select=id,started_at,ended_at,break_minutes,status&order=started_at.desc`),
