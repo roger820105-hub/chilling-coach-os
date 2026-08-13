@@ -32,7 +32,10 @@ module.exports=async function(req,res){
    if(action==="map_sheet_staff"){
     if(!isManager)return res.status(403).json({error:"Manager role required"});
     const name=String(req.body?.externalName||"").trim().slice(0,80),userId=String(req.body?.userId||"");if(!name||!/^[0-9a-f-]{36}$/i.test(userId))return res.status(400).json({error:"Invalid mapping"});
-    await rows(c.url,c.headers,"staff_external_mappings?on_conflict=provider,external_key",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({provider:"google_sheets",external_key:name,user_id:userId,created_by:c.user.id})});return res.json({ok:true});
+    try{
+     await rows(c.url,c.headers,"staff_external_mappings?on_conflict=provider,external_key",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({provider:"google_sheets",external_key:name,user_id:userId})});
+     return res.json({ok:true});
+    }catch(e){const detail=String(e.message||"").slice(0,500);return res.status(500).json({error:`Mapping write failed: ${detail}`,detail})}
    }
    if(!isManager)return res.status(403).json({error:"Manager role required"});
    const id=String(req.body?.requestId||""), approve=req.body?.approve===true;
