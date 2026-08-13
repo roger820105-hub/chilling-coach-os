@@ -175,13 +175,14 @@
       <div class="eyebrow">STUDENT PROFILE</div>
       <h2 id="dialogName">王小明</h2>
       <div id="dialogBody"></div>
-      <div class="profile-actions"><button class="secondary" id="openMeasurementBtn" type="button">＋ 身體數據</button><button class="secondary" id="openAssessmentBtn" type="button">＋ 評估</button><button class="secondary" id="openGoalBtn" type="button">＋ 目標</button></div>
+      <div class="profile-actions"><button class="secondary" id="openMeasurementBtn" type="button">＋ 身體數據</button><button class="secondary" id="openAssessmentBtn" type="button">＋ 評估</button><button class="secondary" id="openGoalBtn" type="button">＋ 目標</button><button class="secondary" id="openTrainingPlanBtn" type="button">訓練計畫</button></div>
       <button class="primary full" id="openPackageBtn" type="button">＋ 建立課程方案</button>
       <button class="secondary full" id="closeStudentDialogBottom" type="button">關閉</button>
     </div>
   </dialog>
 
   <dialog id="healthDialog"><div class="dialog-card"><button class="x" id="closeHealthDialog" type="button">×</button><div class="eyebrow">HEALTH PROFILE</div><h2 id="healthDialogTitle">新增紀錄</h2><div id="healthForm"></div><div id="healthMessage" class="form-message"></div><button class="primary full" id="saveHealthBtn" type="button">儲存</button></div></dialog>
+  <dialog id="trainingPlanDialog"><div class="dialog-card student-profile-card"><button class="x" id="closeTrainingPlanDialog" type="button">×</button><div class="eyebrow">TRAINING PLAN</div><h2>訓練計畫</h2><div id="trainingPlanContent"></div></div></dialog>
 
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="app.js"></script>

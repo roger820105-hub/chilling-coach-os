@@ -264,6 +264,18 @@ async function getStudentGoals(url, secret, studentId) {
   return r.json();
 }
 
+async function getPlannedWorkouts(url, secret, studentId, limit = 12) {
+  const today = getTaiwanParts(), date = `${today.year}-${String(today.month).padStart(2,"0")}-${String(today.day).padStart(2,"0")}`;
+  const r=await fetch(`${url}/rest/v1/planned_workouts?student_id=eq.${encodeURIComponent(studentId)}&status=eq.planned&planned_for=gte.${date}&select=id,plan_id,planned_for,title,items,status&order=planned_for.asc&limit=${limit}`,{headers:dbHeaders(secret)});
+  if(!r.ok)throw new Error(`PLANNED_WORKOUTS:${await r.text()}`);return r.json();
+}
+function formatPlannedWorkout(x){return `${x.planned_for}｜${x.title||"訓練"}\n${(x.items||[]).map(i=>`・${i.exercise_name} ${i.sets??"—"}組×${i.reps??"—"}${i.rpe?` RPE${i.rpe}`:""}`).join("\n")}`;}
+async function assignTemplateByName(url,secret,coachId,student,templateName){
+ const tr=await fetch(`${url}/rest/v1/training_templates?name=ilike.${encodeURIComponent(templateName)}&is_active=eq.true&select=id,name,weeks&limit=2`,{headers:dbHeaders(secret)});if(!tr.ok)throw new Error(await tr.text());const ts=await tr.json();if(ts.length!==1)return{status:ts.length?"multiple":"not_found"};
+ const ir=await fetch(`${url}/rest/v1/training_template_items?template_id=eq.${ts[0].id}&select=*&order=week_no.asc,day_no.asc,position.asc`,{headers:dbHeaders(secret)});if(!ir.ok)throw new Error(await ir.text());const items=await ir.json(),start=new Date();const date=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Taipei"}).format(start);
+ const pr=await fetch(`${url}/rest/v1/student_training_plans`,{method:"POST",headers:{...dbHeaders(secret),Prefer:"return=representation"},body:JSON.stringify({student_id:student.id,template_id:ts[0].id,name:ts[0].name,starts_on:date,status:"active",assigned_by:coachId})});if(!pr.ok)throw new Error(await pr.text());const plan=(await pr.json())[0],groups=new Map();for(const x of items){const k=`${x.week_no}-${x.day_no}`;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(x);}for(const[k,xs]of groups){const[w,d]=k.split("-").map(Number),dt=new Date(`${date}T00:00:00Z`);dt.setUTCDate(dt.getUTCDate()+(w-1)*7+d-1);const r=await fetch(`${url}/rest/v1/planned_workouts`,{method:"POST",headers:dbHeaders(secret),body:JSON.stringify({plan_id:plan.id,student_id:student.id,planned_for:dt.toISOString().slice(0,10),title:`${ts[0].name}｜第${w}週第${d}天`,items:xs.map(x=>({exercise_name:x.exercise_name,sets:x.target_sets,reps:x.target_reps,rpe:x.target_rpe,rest_seconds:x.rest_seconds,note:x.note})),status:"planned"})});if(!r.ok)throw new Error(await r.text());}return{status:"ok",template:ts[0],count:groups.size};
+}
+
 function buildStudentMap(students) {
   const map = new Map();
 
@@ -1626,6 +1638,10 @@ function help() {
     "・王小明 體重 70.5",
     "・王小明 體脂 18.2",
     "※ 同名時：王小明 5678 身體數據",
+    "・王小明 下一堂練什麼",
+    "・王小明 本週課表",
+    "・王小明 訓練計畫",
+    "・王小明 套用 肌肥大A",
     "",
     "【預約／完成】",
     "・8/15 15:00 王小明 預約上課",
@@ -1771,6 +1787,13 @@ async function handleCommand(
 
   const goalQuery=s.match(/^(.+?)\s+(?:目標|會員目標)$/);
   if(goalQuery){const found=await findStudent(url,secret,user.id,goalQuery[1]);if(found.status!=="ok")return studentLookupMessage(found,goalQuery[1]);const goals=await getStudentGoals(url,secret,found.student.id);if(!goals.length)return `${found.student.name} 目前沒有進行中的目標。`;return `🎯 ${found.student.name}｜會員目標\n${goals.map((x,i)=>`${i+1}. ${x.title}${x.target_value!=null?`｜${x.target_value}${x.unit||""}`:""}${x.target_date?`｜期限 ${x.target_date}`:""}`).join("\n")}`;}
+
+  const nextWorkout=s.match(/^(.+?)\s+(?:下一堂練什麼|下一堂訓練|下一堂課表)$/);
+  if(nextWorkout){const found=await findStudent(url,secret,user.id,nextWorkout[1]);if(found.status!=="ok")return studentLookupMessage(found,nextWorkout[1]);const xs=await getPlannedWorkouts(url,secret,found.student.id,1);return xs[0]?`📌 ${found.student.name}｜下一堂訓練\n${formatPlannedWorkout(xs[0])}`:`${found.student.name} 目前沒有未完成的訓練計畫。`;}
+  const weeklyPlan=s.match(/^(.+?)\s+(?:本週課表|訓練計畫)$/);
+  if(weeklyPlan){const found=await findStudent(url,secret,user.id,weeklyPlan[1]);if(found.status!=="ok")return studentLookupMessage(found,weeklyPlan[1]);const xs=await getPlannedWorkouts(url,secret,found.student.id,7);return xs.length?`📅 ${found.student.name}｜訓練計畫\n\n${xs.map(formatPlannedWorkout).join("\n\n")}`:`${found.student.name} 目前沒有未完成的訓練計畫。`;}
+  const applyPlan=s.match(/^(.+?)\s+套用\s+(.+)$/);
+  if(applyPlan){const found=await findStudent(url,secret,user.id,applyPlan[1]);if(found.status!=="ok")return studentLookupMessage(found,applyPlan[1]);const result=await assignTemplateByName(url,secret,user.id,found.student,applyPlan[2].trim());if(result.status==="not_found")return `找不到模板「${applyPlan[2].trim()}」。請先在 Mini App 建立模板。`;if(result.status==="multiple")return "找到多個相似模板，請輸入完整模板名稱。";return `✅ 已將「${result.template.name}」套用給 ${found.student.name}\n共產生 ${result.count} 個訓練日。`;}
 
   /* =====================================================
      V6 — TODAY SCHEDULE
