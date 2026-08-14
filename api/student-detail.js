@@ -12,8 +12,8 @@ module.exports=async function(req,res){
    rows(c.url,c.headers,`students?id=eq.${id}&select=*`), rows(c.url,c.headers,`packages?student_id=eq.${id}&select=*&order=purchased_at.desc`),
    rows(c.url,c.headers,`sessions?student_id=eq.${id}&select=*&order=scheduled_at.desc&limit=50`),
    rows(c.url,c.headers,`session_exercises?student_id=eq.${id}&select=*&order=created_at.desc&limit=100`),
-   rows(c.url,c.headers,`body_measurements?student_id=eq.${id}&select=*&order=measured_at.asc`),
-   rows(c.url,c.headers,`student_assessments?student_id=eq.${id}&select=*&order=assessed_at.desc`),
+   rows(c.url,c.headers,`body_measurements?student_id=eq.${id}&archived_at=is.null&select=*&order=measured_at.asc`),
+   rows(c.url,c.headers,`student_assessments?student_id=eq.${id}&archived_at=is.null&select=*&order=assessed_at.desc`),
    rows(c.url,c.headers,`student_training_plans?student_id=eq.${id}&select=*&order=starts_on.desc`),
    rows(c.url,c.headers,`student_goals?student_id=eq.${id}&select=*&order=created_at.desc`)
   ]);

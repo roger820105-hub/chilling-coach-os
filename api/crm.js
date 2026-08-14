@@ -15,7 +15,17 @@ module.exports=async function(req,res){
   if(req.query?.cron==="daily")return require("../lib/reminders")(req,res);
   const c=await context(req,["coach","manager","admin"]), allowed=await permittedStudentIds(c);
   if(req.method==="POST"){
-   const b=req.body||{}, id=String(b.id||""), status=String(b.status||"");
+   const b=req.body||{};
+   if(b.action==="restore_session"){
+    const sessionId=String(b.sessionId||""),reason=String(b.reason||"").trim();if(!sessionId||!reason)return res.status(400).json({error:"課程與復原原因必填"});
+    const session=(await rows(c.url,c.headers,`sessions?id=eq.${sessionId}&select=id,student_id,status`))[0];if(!session)return res.status(404).json({error:"Session not found"});if(allowed&&!allowed.has(session.student_id))return res.status(403).json({error:"Student not assigned"});
+    const result=await rows(c.url,c.headers,"rpc/reopen_session_and_restore",{method:"POST",body:JSON.stringify({p_session_id:sessionId,p_actor:c.user.id,p_reason:reason})});return res.json({session:Array.isArray(result)?result[0]:result});
+   }
+   if(b.action==="update_preferences"){
+    const value={user_id:c.user.id,class_reminders:b.classReminders!==false,renewal_reminders:b.renewalReminders!==false,manager_digest:managers(c)&&b.managerDigest===true,quiet_start:String(b.quietStart||"21:00").slice(0,5),quiet_end:String(b.quietEnd||"08:00").slice(0,5),updated_at:new Date().toISOString()};
+    const saved=await rows(c.url,c.headers,"notification_preferences?on_conflict=user_id",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify(value)});return res.json({preferences:saved[0]});
+   }
+   const id=String(b.id||""), status=String(b.status||"");
    if(!id||!["pending","contacted","interested","confirmed","renewed","lost"].includes(status))return res.status(400).json({error:"Invalid follow-up"});
    const existing=(await rows(c.url,c.headers,`renewal_followups?id=eq.${id}&select=id,student_id`))[0];
    if(!existing)return res.status(404).json({error:"Follow-up not found"});
@@ -25,15 +35,16 @@ module.exports=async function(req,res){
   }
   if(req.method!=="GET")return res.status(405).json({error:"Method not allowed"});
 
-  const [students,links,packages,sessions,users,sales,followups,usage]=await Promise.all([
+  const [students,links,packages,sessions,users,sales,followups,usage,preferences]=await Promise.all([
    rows(c.url,c.headers,"students?status=eq.active&archived_at=is.null&select=id,name,phone,joined_at"),
    rows(c.url,c.headers,"coach_students?ended_at=is.null&select=coach_id,student_id,is_primary,started_at"),
-   rows(c.url,c.headers,"packages?status=eq.active&select=id,student_id,coach_id,package_name,purchased_sessions,remaining_sessions,price,paid_amount,purchased_at,expires_at,payment_status&order=purchased_at.desc"),
+   rows(c.url,c.headers,"packages?status=eq.active&voided_at=is.null&select=id,student_id,coach_id,package_name,purchased_sessions,remaining_sessions,price,paid_amount,purchased_at,expires_at,payment_status&order=purchased_at.desc"),
    rows(c.url,c.headers,"sessions?select=id,student_id,coach_id,status,scheduled_at,completed_at&order=scheduled_at.desc&limit=5000"),
    rows(c.url,c.headers,"users?is_active=eq.true&select=id,display_name"),
    rows(c.url,c.headers,"sales_records?status=eq.confirmed&select=coach_id,student_id,amount,record_type,occurred_on"),
    rows(c.url,c.headers,"renewal_followups?status=in.(pending,contacted,interested,confirmed)&select=*&order=next_contact_at.asc.nullslast"),
-   rows(c.url,c.headers,`message_usage_monthly?month=eq.${new Date().toISOString().slice(0,7)}-01&select=sent_count,monthly_limit`)
+   rows(c.url,c.headers,`message_usage_monthly?month=eq.${new Date().toISOString().slice(0,7)}-01&select=sent_count,monthly_limit`),
+   rows(c.url,c.headers,`notification_preferences?user_id=eq.${c.user.id}&select=*`)
   ]);
   const visibleStudents=allowed?students.filter(x=>allowed.has(x.id)):students;
   const visibleIds=new Set(visibleStudents.map(x=>x.id)), userMap=Object.fromEntries(users.map(x=>[x.id,x.display_name||"未命名教練"]));
@@ -61,6 +72,6 @@ module.exports=async function(req,res){
    return {coachId,coachName:userMap[coachId]||"未命名教練",students:ids.size,remaining:pkgs.reduce((n,x)=>n+Number(x.remaining_sessions||0),0),renewalDue:due.length,monthlySales:monthSales,completedSessions:completedMonth,forecast:Math.round(due.reduce((n,x)=>n+x.expectedAmount*x.probability/100,0))};
   }).sort((a,b)=>b.monthlySales-a.monthlySales);
   const totalRemaining=coachPerformance.reduce((n,x)=>n+x.remaining,0), forecast=coachPerformance.reduce((n,x)=>n+x.forecast,0);
-  return res.json({metrics:{students:visibleStudents.length,totalRemaining,renewalDue:candidates.length,forecast},renewals:candidates.sort((a,b)=>a.remaining-b.remaining),coaches:coachPerformance,messageUsage:usage[0]||{sent_count:0,monthly_limit:200},rules:{remainingSessions:3,windowDays:30}});
+  return res.json({metrics:{students:visibleStudents.length,totalRemaining,renewalDue:candidates.length,forecast},renewals:candidates.sort((a,b)=>a.remaining-b.remaining),coaches:coachPerformance,messageUsage:usage[0]||{sent_count:0,monthly_limit:200},preferences:preferences[0]||{class_reminders:true,renewal_reminders:true,manager_digest:managers(c),quiet_start:"21:00",quiet_end:"08:00"},rules:{remainingSessions:3,windowDays:30}});
  }catch(e){return fail(res,e)}
 };

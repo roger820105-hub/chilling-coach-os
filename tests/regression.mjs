@@ -14,6 +14,7 @@ const sheetAdapter=fs.readFileSync(new URL("../supabase/migrations/202608130006_
 const studentCrm=fs.readFileSync(new URL("../supabase/migrations/202608140001_student_crm.sql",import.meta.url),"utf8");
 const crm=fs.readFileSync(new URL("../api/crm.js",import.meta.url),"utf8");
 const reminders=fs.readFileSync(new URL("../lib/reminders.js",import.meta.url),"utf8");
+const corrections=fs.readFileSync(new URL("../supabase/migrations/202608140002_record_corrections.sql",import.meta.url),"utf8");
 for(const marker of ["V6 Complete","createBooking","completeSession","complete_session_and_deduct","session_exercises","今日課表","近期預約","訓練摘要","進步多少","身體變化","最近一次評估","studentLookupMessage"])
  assert.ok(webhook.includes(marker),`V6 regression marker missing: ${marker}`);
 for(const table of ["body_measurements","student_assessments","training_templates","student_training_plans","audit_logs","role_requests"])
@@ -33,4 +34,6 @@ for(const removedUi of ["我的班表與工時","上班打卡","待審核請假"
 for(const entity of ["renewal_followups","notification_preferences","notification_jobs","message_usage_monthly","capture_package_sale"])assert.ok(studentCrm.includes(entity),`Student CRM migration missing: ${entity}`);
 for(const marker of ["totalRemaining","renewalDue","monthlySales","forecast","messageUsage"])assert.ok(crm.includes(marker),`CRM API missing: ${marker}`);
 for(const marker of ["LINE_MONTHLY_MESSAGE_LIMIT","notification_jobs","daily_coach_digest","weekly_manager_digest","LINE_CHANNEL_ACCESS_TOKEN"])assert.ok(reminders.includes(marker),`Reminder engine missing: ${marker}`);
+for(const marker of ["adjust_package_sessions","reopen_session_and_restore","package_adjustments","voided_at","write_audit_log"])assert.ok(corrections.includes(marker),`Correction migration missing: ${marker}`);
+for(const marker of ["update_preferences","restore_session","voided_at=is.null"])assert.ok(crm.includes(marker),`CRM correction marker missing: ${marker}`);
 console.log("V6 compatibility and V12 migration checks passed");

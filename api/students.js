@@ -1,199 +1,35 @@
+const {context,rows,fail}=require("./_lib");
+const isManager=c=>c.roles.some(x=>["manager","admin"].includes(x));
+async function access(c,id){if(isManager(c))return;const x=await rows(c.url,c.headers,`coach_students?coach_id=eq.${c.user.id}&student_id=eq.${id}&ended_at=is.null&select=id`);if(!x.length)throw Object.assign(new Error("Student not assigned"),{status:403});}
+const audit=(c,action,id,before,after,reason)=>rows(c.url,c.headers,"rpc/write_audit_log",{method:"POST",body:JSON.stringify({p_actor:c.user.id,p_action:action,p_entity_type:"student",p_entity_id:id,p_source:"mini_app",p_before:before,p_after:after,p_metadata:{reason}})});
+const phoneData=value=>{const phone=String(value||"").trim(),normalizedPhone=phone.replace(/[^0-9]/g,"");if(!phone||normalizedPhone.length<8||normalizedPhone.length>15)throw Object.assign(new Error("請輸入正確的電話號碼"),{status:400});return{phone,normalizedPhone}};
+async function duplicatePhone(c,normalized,id=""){const x=await rows(c.url,c.headers,`students?normalized_phone=eq.${encodeURIComponent(normalized)}${id?`&id=neq.${id}`:""}&select=id,name&limit=1`);if(x[0])throw Object.assign(new Error(`此電話已屬於學員 ${x[0].name}`),{status:409});}
 
-async function getLineProfile(accessToken) {
-  const lineResp = await fetch("https://api.line.me/v2/profile", {
-    headers: { Authorization: `Bearer ${accessToken}` }
-  });
-
-  if (!lineResp.ok) {
-    const err = new Error("Invalid or expired LINE access token");
-    err.statusCode = 401;
-    throw err;
-  }
-  return await lineResp.json();
-}
-
-async function getSystemUser(supabaseUrl, supabaseSecret, lineUserId) {
-  const headers = {
-    apikey: supabaseSecret,
-    Authorization: `Bearer ${supabaseSecret}`,
-    "Content-Type": "application/json"
-  };
-
-  const resp = await fetch(
-    `${supabaseUrl}/rest/v1/users?line_user_id=eq.${encodeURIComponent(lineUserId)}&is_active=eq.true&select=id,display_name`,
-    { headers }
-  );
-
-  if (!resp.ok) throw new Error("Unable to read system user");
-  const rows = await resp.json();
-  if (!rows[0]) {
-    const err = new Error("System account not found");
-    err.statusCode = 403;
-    throw err;
-  }
-  return { user: rows[0], headers };
-}
-
-async function requireCoach(supabaseUrl, headers, userId) {
-  const resp = await fetch(
-    `${supabaseUrl}/rest/v1/user_roles?user_id=eq.${encodeURIComponent(userId)}&role=eq.coach&select=role`,
-    { headers }
-  );
-  if (!resp.ok) throw new Error("Unable to check coach role");
-  const rows = await resp.json();
-  if (!rows.length) {
-    const err = new Error("Coach role required");
-    err.statusCode = 403;
-    throw err;
-  }
-}
-
-module.exports = async function handler(req, res) {
-  try {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseSecret = process.env.SUPABASE_SECRET_KEY;
-
-    if (!supabaseUrl || !supabaseSecret) {
-      return res.status(500).json({ error: "Server environment is not configured" });
-    }
-
-    const authHeader = req.headers.authorization || "";
-    const accessToken = authHeader.startsWith("Bearer ")
-      ? authHeader.slice(7)
-      : null;
-
-    if (!accessToken) {
-      return res.status(401).json({ error: "Missing LINE access token" });
-    }
-
-    const lineProfile = await getLineProfile(accessToken);
-    const { user, headers } = await getSystemUser(
-      supabaseUrl,
-      supabaseSecret,
-      lineProfile.userId
-    );
-
-    await requireCoach(supabaseUrl, headers, user.id);
-
-    if (req.method === "GET") {
-      const relationResp = await fetch(
-        `${supabaseUrl}/rest/v1/coach_students?coach_id=eq.${encodeURIComponent(user.id)}&ended_at=is.null&select=student_id,is_primary,started_at`,
-        { headers }
-      );
-
-      if (!relationResp.ok) {
-        throw new Error("Unable to load coach-student relations");
-      }
-
-      const relations = await relationResp.json();
-      const ids = [...new Set(relations.map(r => r.student_id).filter(Boolean))];
-
-      if (!ids.length) {
-        return res.status(200).json({ students: [] });
-      }
-
-      const inFilter = ids.map(id => `"${id}"`).join(",");
-      const studentsResp = await fetch(
-        `${supabaseUrl}/rest/v1/students?id=in.(${encodeURIComponent(inFilter)})&select=id,name,phone,status,joined_at,note,created_at&order=created_at.desc`,
-        { headers }
-      );
-
-      if (!studentsResp.ok) {
-        const detail = await studentsResp.text();
-        throw new Error(`Unable to load students: ${detail}`);
-      }
-
-      const students = await studentsResp.json();
-      return res.status(200).json({ students });
-    }
-
-    if (req.method === "POST") {
-      const body = req.body || {};
-      const name = String(body.name || "").trim();
-      const phone = String(body.phone || "").trim();
-      const normalizedPhone = phone.replace(/[^0-9]/g, "");
-      const note = String(body.note || "").trim();
-
-      if (!name || !phone) {
-        return res.status(400).json({ error: "Student name and phone are required" });
-      }
-      if (normalizedPhone.length < 8 || normalizedPhone.length > 15) {
-        return res.status(400).json({ error: "Invalid phone number" });
-      }
-      if (name.length > 50 || phone.length > 30 || note.length > 500) {
-        return res.status(400).json({ error: "Input is too long" });
-      }
-
-      const duplicateResp = await fetch(
-        `${supabaseUrl}/rest/v1/students?normalized_phone=eq.${encodeURIComponent(normalizedPhone)}&select=id,name,phone&limit=1`,
-        { headers }
-      );
-      if (!duplicateResp.ok) throw new Error("Unable to check duplicate phone");
-      const duplicateRows = await duplicateResp.json();
-      if (duplicateRows[0]) {
-        return res.status(409).json({ error: `Phone already belongs to ${duplicateRows[0].name}`, existingStudentId: duplicateRows[0].id });
-      }
-
-      const createStudentResp = await fetch(
-        `${supabaseUrl}/rest/v1/students`,
-        {
-          method: "POST",
-          headers: {
-            ...headers,
-            Prefer: "return=representation"
-          },
-          body: JSON.stringify({
-            name,
-            phone: phone || null,
-            note: note || null,
-            status: "active"
-          })
-        }
-      );
-
-      if (!createStudentResp.ok) {
-        const detail = await createStudentResp.text();
-        throw new Error(`Unable to create student: ${detail}`);
-      }
-
-      const createdRows = await createStudentResp.json();
-      const student = createdRows[0];
-
-      const linkResp = await fetch(
-        `${supabaseUrl}/rest/v1/coach_students`,
-        {
-          method: "POST",
-          headers: {
-            ...headers,
-            Prefer: "return=minimal"
-          },
-          body: JSON.stringify({
-            coach_id: user.id,
-            student_id: student.id,
-            is_primary: true
-          })
-        }
-      );
-
-      if (!linkResp.ok) {
-        // Best-effort rollback so an unassigned orphan student is not left behind.
-        await fetch(
-          `${supabaseUrl}/rest/v1/students?id=eq.${encodeURIComponent(student.id)}`,
-          { method: "DELETE", headers }
-        );
-        const detail = await linkResp.text();
-        throw new Error(`Unable to assign coach: ${detail}`);
-      }
-
-      return res.status(201).json({ student });
-    }
-
-    return res.status(405).json({ error: "Method not allowed" });
-
-  } catch (error) {
-    console.error(error);
-    return res.status(error.statusCode || 500).json({
-      error: error.statusCode ? error.message : "Internal server error"
-    });
-  }
-};
+module.exports=async function(req,res){try{
+ const c=await context(req,["coach","manager","admin"]);
+ if(req.method==="GET"){
+  let query="students?archived_at=is.null&select=id,name,phone,status,joined_at,note,birthday,gender,tags,created_at&order=created_at.desc";
+  if(!isManager(c)){const links=await rows(c.url,c.headers,`coach_students?coach_id=eq.${c.user.id}&ended_at=is.null&select=student_id`),ids=links.map(x=>x.student_id);if(!ids.length)return res.json({students:[]});query=`students?id=in.(${encodeURIComponent(ids.map(x=>`"${x}"`).join(","))})&archived_at=is.null&select=id,name,phone,status,joined_at,note,birthday,gender,tags,created_at&order=created_at.desc`;}
+  return res.json({students:await rows(c.url,c.headers,query)});
+ }
+ const b=req.body||{};
+ if(req.method==="POST"){
+  const name=String(b.name||"").trim(),{phone,normalizedPhone}=phoneData(b.phone),note=String(b.note||"").trim();if(!name||name.length>50||note.length>500)return res.status(400).json({error:"請確認姓名與備註長度"});await duplicatePhone(c,normalizedPhone);
+  const student=(await rows(c.url,c.headers,"students",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({name,phone,note:note||null,status:"active",birthday:b.birthday||null,gender:b.gender||null,tags:Array.isArray(b.tags)?b.tags:[]})}))[0];
+  await rows(c.url,c.headers,"coach_students",{method:"POST",body:JSON.stringify({coach_id:c.user.id,student_id:student.id,is_primary:true})});return res.status(201).json({student});
+ }
+ if(req.method!=="PATCH")return res.status(405).json({error:"Method not allowed"});
+ const id=String(b.studentId||""),action=String(b.action||"update"),reason=String(b.reason||"").trim();if(!id)return res.status(400).json({error:"studentId required"});await access(c,id);const old=(await rows(c.url,c.headers,`students?id=eq.${id}&select=*`))[0];if(!old)return res.status(404).json({error:"Student not found"});
+ if(action==="update"){
+  const name=String(b.name||"").trim(),{phone,normalizedPhone}=phoneData(b.phone);if(!name||name.length>50)return res.status(400).json({error:"請輸入學員姓名"});await duplicatePhone(c,normalizedPhone,id);
+  const patch={name,phone,note:String(b.note||"").trim().slice(0,500)||null,status:["active","paused","inactive"].includes(b.status)?b.status:"active",birthday:b.birthday||null,gender:b.gender||null,tags:Array.isArray(b.tags)?b.tags.map(String).slice(0,20):[],updated_at:new Date().toISOString()};
+  const result=await rows(c.url,c.headers,`students?id=eq.${id}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify(patch)});await audit(c,"update",id,old,result[0],reason||"編輯學員資料");return res.json({student:result[0]});
+ }
+ if(action==="archive"){
+  if(!reason)return res.status(400).json({error:"請填寫結案原因"});const result=await rows(c.url,c.headers,`students?id=eq.${id}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({status:"inactive",archived_at:new Date().toISOString(),updated_at:new Date().toISOString()})});await audit(c,"archive",id,old,result[0],reason);return res.json({student:result[0]});
+ }
+ if(action==="transfer"){
+  if(!isManager(c))return res.status(403).json({error:"轉移教練需主管權限"});const coachId=String(b.coachId||"");if(!coachId)return res.status(400).json({error:"請選擇新教練"});await rows(c.url,c.headers,`coach_students?student_id=eq.${id}&ended_at=is.null`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString()})});await rows(c.url,c.headers,"coach_students",{method:"POST",body:JSON.stringify({student_id:id,coach_id:coachId,is_primary:true})});await audit(c,"transfer",id,old,old,reason||"主管轉移教練");return res.json({ok:true});
+ }
+ return res.status(400).json({error:"Unsupported action"});
+}catch(e){return fail(res,e)}};

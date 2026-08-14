@@ -64,6 +64,14 @@
         <div class="card today" id="todaySchedule"><div class="load-state">正在載入今日課表…</div></div>
         <div class="section-head"><div><div class="eyebrow">RENEWAL</div><h3>我的續約待辦</h3></div><button class="secondary" id="refreshCoachCrm" type="button">重新整理</button></div>
         <div class="card"><div id="coachRenewalList" class="compact-list"><div class="load-state">正在整理續約名單…</div></div></div>
+        <div class="section-head"><div><div class="eyebrow">REMINDERS</div><h3>提醒設定</h3></div></div>
+        <div class="card preference-card">
+          <label><input id="prefClasses" type="checkbox" checked /> 每天提醒未來 24 小時課程</label>
+          <label><input id="prefRenewals" type="checkbox" checked /> 提醒剩 3 堂以下或 30 天內到期</label>
+          <label id="prefManagerRow" class="hidden"><input id="prefManager" type="checkbox" checked /> 每週一接收主管摘要</label>
+          <div class="quiet-hours"><span>勿擾時段</span><input id="prefQuietStart" class="text-input" type="time" value="21:00" /><span>至</span><input id="prefQuietEnd" class="text-input" type="time" value="08:00" /></div>
+          <button class="secondary" id="saveReminderPreferences" type="button">儲存提醒設定</button><span id="preferenceMessage" class="form-message"></span>
+        </div>
         <div class="section-head"><div><div class="eyebrow">AI COPILOT</div><h3>教練資料助理</h3></div></div>
         <div class="card copilot-card"><textarea id="copilotQuery" class="text-input textarea-input" maxlength="500" placeholder="例如：測試學員A 最近進步怎樣？"></textarea><button class="primary" id="askCopilot" type="button">查詢資料</button><div id="copilotAnswer" class="callout">Copilot 只使用你有權限查看的已儲存資料。</div></div>
       </section>
@@ -149,6 +157,15 @@
       <input id="packageName" class="text-input" type="text" maxlength="80" placeholder="例如：私人教練10堂" />
       <label class="field-label">購買堂數 *</label>
       <input id="packageSessions" class="text-input" type="number" min="1" max="500" placeholder="例如：10" />
+      <div id="packageEditFields" class="hidden">
+        <label class="field-label">目前剩餘堂數 *</label>
+        <input id="packageRemaining" class="text-input" type="number" min="0" max="500" />
+        <label class="field-label">付款狀態</label>
+        <select id="packagePaymentStatus" class="text-input"><option value="paid">已付款</option><option value="partial">部分付款</option><option value="unpaid">未付款</option><option value="refunded">已退款</option></select>
+        <label class="field-label">修改原因 *</label>
+        <textarea id="packageReason" class="text-input textarea-input" maxlength="300" placeholder="例如：首次輸入堂數錯誤"></textarea>
+        <div class="callout">堂數與金額的修改會保留紀錄，方便日後核對。</div>
+      </div>
       <label class="field-label">方案金額</label>
       <input id="packagePrice" class="text-input" type="number" min="0" step="1" placeholder="例如：20000" />
       <label class="field-label">到期日</label>
@@ -163,12 +180,25 @@
       <button class="x" id="closeStudentDialog" type="button">×</button>
       <div class="eyebrow">STUDENT PROFILE</div>
       <h2 id="dialogName">王小明</h2>
+      <button class="secondary full" id="editStudentBtn" type="button">編輯基本資料</button>
       <div id="dialogBody"></div>
       <div class="profile-actions"><button class="secondary" id="openMeasurementBtn" type="button">＋ 身體數據</button><button class="secondary" id="openAssessmentBtn" type="button">＋ 評估</button><button class="secondary" id="openGoalBtn" type="button">＋ 目標</button><button class="secondary" id="openTrainingPlanBtn" type="button">訓練計畫</button></div>
       <button class="primary full" id="openPackageBtn" type="button">＋ 建立課程方案</button>
       <button class="secondary full" id="closeStudentDialogBottom" type="button">關閉</button>
     </div>
   </dialog>
+
+  <dialog id="editStudentDialog"><div class="dialog-card"><button class="x" id="closeEditStudentDialog" type="button">×</button><div class="eyebrow">EDIT STUDENT</div><h2>編輯學員資料</h2>
+    <label class="field-label">姓名 *</label><input id="editStudentName" class="text-input" maxlength="50" />
+    <label class="field-label">電話 *</label><input id="editStudentPhone" class="text-input" type="tel" maxlength="30" />
+    <label class="field-label">生日</label><input id="editStudentBirthday" class="text-input" type="date" />
+    <label class="field-label">狀態</label><select id="editStudentStatus" class="text-input"><option value="active">進行中</option><option value="paused">暫停</option><option value="inactive">停用</option></select>
+    <label class="field-label">標籤</label><input id="editStudentTags" class="text-input" placeholder="以逗號分隔，例如：減脂,晚間" />
+    <label class="field-label">備註</label><textarea id="editStudentNote" class="text-input textarea-input" maxlength="500"></textarea>
+    <div id="editStudentMessage" class="form-message"></div><button class="primary full" id="saveStudentEditBtn" type="button">儲存修改</button>
+    <button class="danger-outline full" id="archiveStudentBtn" type="button">封存這位學員</button><small class="muted">封存不會刪除課程、堂數或身體紀錄。</small>
+    <div id="managerTransferFields" class="hidden"><div class="callout"><b>主管操作｜轉移主要教練</b><br>轉移後會保留原教練關係歷史。</div><select id="transferCoachId" class="text-input"></select><input id="transferReason" class="text-input" maxlength="300" placeholder="轉移原因" /><button class="secondary full" id="transferStudentBtn" type="button">確認轉移教練</button></div>
+  </div></dialog>
 
   <dialog id="healthDialog"><div class="dialog-card"><button class="x" id="closeHealthDialog" type="button">×</button><div class="eyebrow">HEALTH PROFILE</div><h2 id="healthDialogTitle">新增紀錄</h2><div id="healthForm"></div><div id="healthMessage" class="form-message"></div><button class="primary full" id="saveHealthBtn" type="button">儲存</button></div></dialog>
   <dialog id="trainingPlanDialog"><div class="dialog-card student-profile-card"><button class="x" id="closeTrainingPlanDialog" type="button">×</button><div class="eyebrow">TRAINING PLAN</div><h2>訓練計畫</h2><div id="trainingPlanContent"></div></div></dialog>

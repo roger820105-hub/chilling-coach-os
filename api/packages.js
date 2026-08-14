@@ -1,51 +1,45 @@
+const {context,rows,fail}=require("./_lib");
 
-async function profile(token){
-  const r=await fetch("https://api.line.me/v2/profile",{headers:{Authorization:`Bearer ${token}`}});
-  if(!r.ok)throw Object.assign(new Error("Invalid LINE token"),{status:401});
-  return r.json();
+async function ensureAccess(c,studentId){
+ if(c.roles.some(x=>["manager","admin"].includes(x)))return;
+ const x=await rows(c.url,c.headers,`coach_students?coach_id=eq.${c.user.id}&student_id=eq.${studentId}&ended_at=is.null&select=id`);
+ if(!x.length)throw Object.assign(new Error("Student not assigned"),{status:403});
 }
-const h=s=>({apikey:s,Authorization:`Bearer ${s}`,"Content-Type":"application/json"});
-async function userByLine(url,s,lineId){
-  const headers=h(s);
-  const r=await fetch(`${url}/rest/v1/users?line_user_id=eq.${encodeURIComponent(lineId)}&is_active=eq.true&select=id`,{headers});
-  const rows=r.ok?await r.json():[];
-  if(!rows[0])throw Object.assign(new Error("System user not found"),{status:403});
-  return {user:rows[0],headers};
+async function getPackage(c,id){
+ const x=(await rows(c.url,c.headers,`packages?id=eq.${id}&select=*`))[0];
+ if(!x)throw Object.assign(new Error("Package not found"),{status:404});
+ await ensureAccess(c,x.student_id); return x;
 }
-async function allowed(url,headers,userId,studentId){
-  const r=await fetch(`${url}/rest/v1/coach_students?coach_id=eq.${encodeURIComponent(userId)}&student_id=eq.${encodeURIComponent(studentId)}&ended_at=is.null&select=id`,{headers});
-  return r.ok&&(await r.json()).length>0;
-}
-module.exports=async function(req,res){
-  try{
-    const url=process.env.SUPABASE_URL,s=process.env.SUPABASE_SECRET_KEY;
-    const auth=req.headers.authorization||"",token=auth.startsWith("Bearer ")?auth.slice(7):null;
-    if(!url||!s)return res.status(500).json({error:"Server environment is not configured"});
-    if(!token)return res.status(401).json({error:"Missing LINE access token"});
-    const p=await profile(token),{user,headers}=await userByLine(url,s,p.userId);
+const audit=(c,action,id,before,after,reason)=>rows(c.url,c.headers,"rpc/write_audit_log",{method:"POST",body:JSON.stringify({p_actor:c.user.id,p_action:action,p_entity_type:"package",p_entity_id:id,p_source:"mini_app",p_before:before,p_after:after,p_metadata:{reason}})});
 
-    if(req.method==="GET"){
-      const studentId=String(req.query.student_id||"");
-      if(!studentId)return res.status(400).json({error:"student_id required"});
-      if(!(await allowed(url,headers,user.id,studentId)))return res.status(403).json({error:"Student not assigned"});
-      const r=await fetch(`${url}/rest/v1/packages?student_id=eq.${encodeURIComponent(studentId)}&status=eq.active&select=id,package_name,purchased_sessions,remaining_sessions,price,purchased_at,expires_at,status&order=purchased_at.desc&limit=1`,{headers});
-      if(!r.ok)throw new Error(await r.text());
-      const rows=await r.json();
-      return res.status(200).json({package:rows[0]||null});
-    }
-
-    if(req.method==="POST"){
-      const b=req.body||{},sessions=Number(b.purchasedSessions);
-      if(!b.studentId||!Number.isInteger(sessions)||sessions<=0)return res.status(400).json({error:"Invalid input"});
-      if(!(await allowed(url,headers,user.id,b.studentId)))return res.status(403).json({error:"Student not assigned"});
-      const r=await fetch(`${url}/rest/v1/packages`,{method:"POST",headers:{...headers,Prefer:"return=representation"},body:JSON.stringify({
-        student_id:b.studentId,coach_id:user.id,package_name:String(b.packageName||"").trim()||null,
-        purchased_sessions:sessions,remaining_sessions:sessions,price:Number(b.price||0),paid_amount:Number(b.price||0),payment_status:"paid",
-        expires_at:b.expiresAt||null,status:"active",renewed_from_id:b.renewedFromId||null
-      })});
-      if(!r.ok)throw new Error(await r.text());
-      return res.status(201).json({package:(await r.json())[0]});
-    }
-    return res.status(405).json({error:"Method not allowed"});
-  }catch(e){console.error(e);return res.status(e.status||500).json({error:e.status?e.message:"Internal server error"});}
-};
+module.exports=async function(req,res){try{
+ const c=await context(req,["coach","manager","admin"]);
+ if(req.method==="GET"){
+  const studentId=String(req.query.student_id||"");if(!studentId)return res.status(400).json({error:"student_id required"});await ensureAccess(c,studentId);
+  const packages=await rows(c.url,c.headers,`packages?student_id=eq.${studentId}&select=*&order=purchased_at.desc`);
+  const ids=packages.map(x=>x.id);let adjustments=[];
+  if(ids.length)adjustments=await rows(c.url,c.headers,`package_adjustments?package_id=in.(${encodeURIComponent(ids.map(x=>`"${x}"`).join(","))})&select=*&order=created_at.desc`);
+  return res.json({package:packages.find(x=>x.status==="active"&&!x.voided_at)||null,packages,adjustments});
+ }
+ if(req.method!=="POST")return res.status(405).json({error:"Method not allowed"});
+ const b=req.body||{},action=String(b.action||"create");
+ if(action==="create"){
+  const sessions=Number(b.purchasedSessions);if(!b.studentId||!Number.isInteger(sessions)||sessions<=0||sessions>500)return res.status(400).json({error:"Invalid session count"});await ensureAccess(c,b.studentId);
+  const created=await rows(c.url,c.headers,"packages",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({student_id:b.studentId,coach_id:c.user.id,package_name:String(b.packageName||"").trim()||null,purchased_sessions:sessions,remaining_sessions:sessions,price:Number(b.price||0),paid_amount:Number(b.price||0),payment_status:"paid",expires_at:b.expiresAt||null,status:"active",renewed_from_id:b.renewedFromId||null})});
+  return res.status(201).json({package:created[0]});
+ }
+ const old=await getPackage(c,String(b.packageId||"")),reason=String(b.reason||"").trim();if(!reason)return res.status(400).json({error:"請填寫修改原因"});
+ if(action==="adjust"){
+  const purchased=Number(b.purchasedSessions),remaining=Number(b.remainingSessions);if(!Number.isInteger(purchased)||!Number.isInteger(remaining)||purchased<0||remaining<0||remaining>purchased||purchased>500)return res.status(400).json({error:"堂數不正確：剩餘堂數不可大於購買堂數"});
+  const result=await rows(c.url,c.headers,"rpc/adjust_package_sessions",{method:"POST",body:JSON.stringify({p_package_id:old.id,p_actor:c.user.id,p_purchased:purchased,p_remaining:remaining,p_reason:reason})});return res.json({package:Array.isArray(result)?result[0]:result});
+ }
+ if(action==="update"){
+  const patch={package_name:String(b.packageName||"").trim()||null,price:Number(b.price||0),paid_amount:Number(b.paidAmount??b.price??0),payment_status:["paid","partial","unpaid","refunded"].includes(b.paymentStatus)?b.paymentStatus:"paid",expires_at:b.expiresAt||null,frozen_until:b.frozenUntil||null,updated_at:new Date().toISOString()};
+  const result=await rows(c.url,c.headers,`packages?id=eq.${old.id}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify(patch)});await audit(c,"update",old.id,old,result[0],reason);return res.json({package:result[0]});
+ }
+ if(action==="void"){
+  if(!c.roles.some(x=>["manager","admin"].includes(x)))return res.status(403).json({error:"方案作廢需主管權限"});
+  const result=await rows(c.url,c.headers,`packages?id=eq.${old.id}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({voided_at:new Date().toISOString(),void_reason:reason,updated_at:new Date().toISOString()})});await audit(c,"void",old.id,old,result[0],reason);return res.json({package:result[0]});
+ }
+ return res.status(400).json({error:"Unsupported action"});
+}catch(e){return fail(res,e)}};
