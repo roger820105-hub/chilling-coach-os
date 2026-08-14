@@ -99,9 +99,9 @@ async function initLineAccount() {
     setRoleUI(roles);
 
     if (roles.includes("coach")) {
-      await Promise.all([loadStudents(), loadDashboard(),loadCrm()]);
+      await Promise.all([loadStudents(), loadDashboard(),loadCrm("coach")]);
     }
-    if (roles.includes("manager") || roles.includes("admin")) await Promise.all([loadRoleRequests(),loadCrm(),...(roles.includes("coach")?[]:[loadStudents()])]);
+    if (roles.includes("manager") || roles.includes("admin")) await Promise.all([loadRoleRequests(),loadPermissionUsers(),...(roles.includes("coach")?[]:[loadCrm("manager"),loadStudents()])]);
 
     if (payload.created) {
       accountState.textContent = "系統帳號已建立｜目前尚未指派角色";
@@ -245,8 +245,8 @@ document.getElementById("openCoachGuide").onclick=()=>coachGuideDialog.showModal
 document.getElementById("closeCoachGuide").onclick=()=>coachGuideDialog.close();
 document.getElementById("closeCoachGuideBottom").onclick=()=>coachGuideDialog.close();
 const coachView=document.getElementById("coachView"), managerView=document.getElementById("managerView");
-document.getElementById("coachBtn").onclick=()=>{coachView.classList.remove("hidden");managerView.classList.add("hidden");coachBtn.classList.add("active");managerBtn.classList.remove("active");document.getElementById("bottomNav").classList.remove("hidden")};
-document.getElementById("managerBtn").onclick=()=>{managerView.classList.remove("hidden");coachView.classList.add("hidden");managerBtn.classList.add("active");coachBtn.classList.remove("active");document.getElementById("bottomNav").classList.add("hidden")};
+document.getElementById("coachBtn").onclick=()=>{coachView.classList.remove("hidden");managerView.classList.add("hidden");coachBtn.classList.add("active");managerBtn.classList.remove("active");document.getElementById("bottomNav").classList.remove("hidden");loadCrm("coach")};
+document.getElementById("managerBtn").onclick=()=>{managerView.classList.remove("hidden");coachView.classList.add("hidden");managerBtn.classList.add("active");coachBtn.classList.remove("active");document.getElementById("bottomNav").classList.add("hidden");Promise.all([loadCrm("manager"),loadPermissionUsers()])};
 
 async function openStudent(s){
  currentStudent = s;
@@ -460,6 +460,12 @@ async function loadRoleRequests(){
 }
 window.reviewRoleRequest=async(id,approve)=>{if(!confirm(approve?"確定核准此教練權限？":"確定拒絕此申請？"))return;try{await apiJson("/api/role-request-review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requestId:id,approve})});await loadRoleRequests()}catch(e){alert("審核失敗，請重新整理後再試。")}};
 document.getElementById("refreshRoleRequests").onclick=loadRoleRequests;
+async function loadPermissionUsers(){
+ const box=document.getElementById("permissionUserList");if(!box)return;
+ try{const d=await apiJson("/api/role-requests?scope=users");box.innerHTML=d.users.length?d.users.map(x=>`<div class="permission-row"><div><b>${escapeHtml(x.display_name||"LINE 使用者")}</b><span>${x.roles.length?`目前：${x.roles.map(r=>r==="coach"?"教練":r==="manager"?"主管":r==="admin"?"系統管理員":r).join("、")}`:"目前沒有權限"}</span></div><div class="permission-actions"><label><input type="checkbox" ${x.roles.includes("coach")?"checked":""} onchange="setUserRole('${x.id}','coach',this.checked,this)" /> 教練端</label><label><input type="checkbox" ${x.roles.includes("manager")?"checked":""} onchange="setUserRole('${x.id}','manager',this.checked,this)" ${x.roles.includes("admin")?"disabled":""} /> 主管端</label></div></div>`).join(""):"<div class=\"load-state empty\">目前沒有可管理的人員。</div>"}catch(e){box.textContent=`人員權限載入失敗：${e.message}`}
+}
+window.setUserRole=async(userId,role,enabled,inputEl)=>{const label=role==="manager"?"主管端":"教練端";if(!confirm(`確定要${enabled?"開啟":"移除"}此人的「${label}」權限？`)){inputEl.checked=!enabled;return}inputEl.disabled=true;try{await apiJson("/api/role-requests",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"set_role",userId,role,enabled})});await loadPermissionUsers()}catch(e){inputEl.checked=!enabled;inputEl.disabled=false;alert(`權限變更失敗：${e.message}`)}};
+document.getElementById("refreshPermissionUsers").onclick=loadPermissionUsers;
 
 // Retired employee attendance/payroll implementation retained in source history only.
 if(false){
@@ -494,9 +500,9 @@ document.getElementById("clockInBtn").onclick=()=>clock("clock_in");document.get
 document.getElementById("submitLeaveBtn").onclick=async()=>{const msg=document.getElementById("leaveMessage"),body={action:"request_leave",leaveType:document.getElementById("leaveType").value,startsAt:document.getElementById("leaveStartsAt").value,endsAt:document.getElementById("leaveEndsAt").value,reason:document.getElementById("leaveReason").value};try{msg.textContent="正在送出…";await apiJson("/api/operations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});msg.textContent="請假申請已送出。";msg.className="form-message ok";await loadMyOperations();setTimeout(()=>leaveDialog.close(),500)}catch(e){msg.textContent="送出失敗，請確認假別與時間。";msg.className="form-message error"}};
 }
 
-async function loadCrm(){
+async function loadCrm(scope="coach"){
  try{
-  const d=await apiJson("/api/crm");latestCrm=d;
+  const d=await apiJson(`/api/crm?scope=${encodeURIComponent(scope)}`);latestCrm=d;
   [["dataStudents",d.metrics.students],["dataRemaining",d.metrics.totalRemaining],["dataRenewals",d.metrics.renewalDue],["dataForecast",Number(d.metrics.forecast||0).toLocaleString("zh-TW")]].forEach(([id,value])=>{const el=document.getElementById(id);if(el)el.textContent=value});
   const set=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value};
   set("crmStudents",d.metrics.students);set("crmRemaining",d.metrics.totalRemaining);set("crmRenewals",d.metrics.renewalDue);set("crmForecast",Number(d.metrics.forecast).toLocaleString("zh-TW"));
@@ -507,7 +513,7 @@ async function loadCrm(){
   const box=document.getElementById("coachRenewalList");if(box){const mine=d.renewals.filter(x=>!window.chillingUser||x.coachId===window.chillingUser.id);box.innerHTML=mine.length?mine.map(x=>`<div><b>${escapeHtml(x.studentName)}｜剩 ${x.remaining} 堂</b><span>${x.expiresAt?`到期 ${escapeHtml(x.expiresAt)}｜`:""}預估 NT$${Number(x.expectedAmount).toLocaleString("zh-TW")}｜${x.probability}%</span></div>`).join(""):`<div class="muted">目前沒有需要聯絡的學員。</div>`}
  }catch(e){console.error(e);const box=document.getElementById("coachRenewalList");if(box)box.textContent="續約資料尚未啟用，請先執行 2.0 資料庫升級。"}
 }
-document.getElementById("refreshCoachCrm").onclick=loadCrm;
+document.getElementById("refreshCoachCrm").onclick=()=>loadCrm("coach");
 document.getElementById("saveReminderPreferences").onclick=async()=>{const btn=document.getElementById("saveReminderPreferences"),msg=document.getElementById("preferenceMessage");btn.disabled=true;msg.textContent="儲存中…";try{await apiJson("/api/crm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"update_preferences",classReminders:document.getElementById("prefClasses").checked,renewalReminders:document.getElementById("prefRenewals").checked,managerDigest:document.getElementById("prefManager").checked,quietStart:document.getElementById("prefQuietStart").value,quietEnd:document.getElementById("prefQuietEnd").value})});msg.textContent="已儲存";msg.className="form-message ok"}catch(e){msg.textContent=e.message;msg.className="form-message error"}finally{btn.disabled=false}};
 
 const trainingPlanDialog=document.getElementById("trainingPlanDialog"),trainingPlanContent=document.getElementById("trainingPlanContent");
@@ -526,12 +532,12 @@ function showCoachTab(tab){
  document.querySelectorAll("[data-coach-panel]").forEach(x=>x.classList.toggle("hidden",x.dataset.coachPanel!==tab));
  document.querySelectorAll("[data-coach-tab]").forEach(x=>x.classList.toggle("active",x.dataset.coachTab===tab));
  window.scrollTo({top:0,behavior:"smooth"});
- if(tab==="courses")loadCourses(courseRange);if(tab==="data")loadCrm();
+ if(tab==="courses")loadCourses(courseRange);if(tab==="data")loadCrm("coach");
 }
 document.querySelectorAll("[data-coach-tab]").forEach(x=>x.onclick=()=>showCoachTab(x.dataset.coachTab));
 document.getElementById("overviewAllCourses").onclick=()=>showCoachTab("courses");
 document.getElementById("overviewAddCourse").onclick=()=>{showCoachTab("courses");openCourseDialog()};
-document.getElementById("refreshData").onclick=()=>Promise.all([loadDashboard(),loadCrm()]);
+document.getElementById("refreshData").onclick=()=>Promise.all([loadDashboard(),loadCrm("coach")]);
 
 function courseBounds(range){
  const now=new Date(), start=new Date(now), end=new Date(now);start.setHours(0,0,0,0);end.setHours(23,59,59,999);
@@ -563,6 +569,6 @@ document.getElementById("saveCourse").onclick=async()=>{
  btn.disabled=true;btn.textContent="儲存中…";try{await apiJson("/api/dashboard",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:editingCourse?"update_session":"create_session",sessionId:editingCourse?.id,studentId,scheduledAt:new Date(scheduledAt).toISOString(),reason})});courseDialog.close();await Promise.all([loadCourses(courseRange),loadDashboard()])}catch(e){courseMessage.textContent=e.message;courseMessage.className="form-message error"}finally{btn.disabled=false;btn.textContent=editingCourse?"儲存新時間":"建立課程"}
 };
 window.editCourse=id=>{const row=courseRows.find(x=>x.id===id);if(row)openCourseDialog(row)};
-window.completeCourse=async id=>{const row=courseRows.find(x=>x.id===id);if(!row||!confirm(`確認「${row.student_name}」已完成這堂課？完成後會扣除一堂。`))return;try{await apiJson("/api/dashboard",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"complete_session",sessionId:id})});await Promise.all([loadCourses(courseRange),loadDashboard(),loadCrm()])}catch(e){alert(`完成失敗：${e.message}`)}};
+window.completeCourse=async id=>{const row=courseRows.find(x=>x.id===id);if(!row||!confirm(`確認「${row.student_name}」已完成這堂課？完成後會扣除一堂。`))return;try{await apiJson("/api/dashboard",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"complete_session",sessionId:id})});await Promise.all([loadCourses(courseRange),loadDashboard(),loadCrm("coach")])}catch(e){alert(`完成失敗：${e.message}`)}};
 window.cancelCourse=async id=>{const row=courseRows.find(x=>x.id===id),reason=prompt(`請輸入取消「${row?.student_name||"學員"}」課程的原因：`);if(!reason)return;if(!confirm("確定取消？取消不會扣堂。"))return;try{await apiJson("/api/dashboard",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"cancel_session",sessionId:id,reason})});await Promise.all([loadCourses(courseRange),loadDashboard()])}catch(e){alert(`取消失敗：${e.message}`)}};
-window.restoreCourse=async id=>{const row=courseRows.find(x=>x.id===id),reason=prompt(`請輸入復原「${row?.student_name||"學員"}」完成狀態的原因：`);if(!reason)return;if(!confirm("確定復原？系統會補回一堂。"))return;try{await apiJson("/api/dashboard",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"restore_session",sessionId:id,reason})});await Promise.all([loadCourses(courseRange),loadDashboard(),loadCrm()])}catch(e){alert(`復原失敗：${e.message}`)}};
+window.restoreCourse=async id=>{const row=courseRows.find(x=>x.id===id),reason=prompt(`請輸入復原「${row?.student_name||"學員"}」完成狀態的原因：`);if(!reason)return;if(!confirm("確定復原？系統會補回一堂。"))return;try{await apiJson("/api/dashboard",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"restore_session",sessionId:id,reason})});await Promise.all([loadCourses(courseRange),loadDashboard(),loadCrm("coach")])}catch(e){alert(`復原失敗：${e.message}`)}};

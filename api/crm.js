@@ -4,8 +4,8 @@ const managers=c=>c.roles.some(x=>["manager","admin"].includes(x));
 const day=v=>v?String(v).slice(0,10):null;
 const daysBetween=(a,b)=>Math.ceil((new Date(a)-new Date(b))/86400000);
 
-async function permittedStudentIds(c){
- if(managers(c))return null;
+async function permittedStudentIds(c,scope="coach"){
+ if(managers(c)&&scope==="manager")return null;
  const links=await rows(c.url,c.headers,`coach_students?coach_id=eq.${c.user.id}&ended_at=is.null&select=student_id`);
  return new Set(links.map(x=>x.student_id));
 }
@@ -13,7 +13,7 @@ async function permittedStudentIds(c){
 module.exports=async function(req,res){
  try{
   if(req.query?.cron==="daily")return require("../lib/reminders")(req,res);
-  const c=await context(req,["coach","manager","admin"]), allowed=await permittedStudentIds(c);
+  const c=await context(req,["coach","manager","admin"]), scope=String(req.query?.scope||"coach"), allowed=await permittedStudentIds(c,scope);
   if(req.method==="POST"){
    const b=req.body||{};
    if(b.action==="restore_session"){
@@ -49,6 +49,7 @@ module.exports=async function(req,res){
   const visibleStudents=allowed?students.filter(x=>allowed.has(x.id)):students;
   const visibleIds=new Set(visibleStudents.map(x=>x.id)), userMap=Object.fromEntries(users.map(x=>[x.id,x.display_name||"未命名教練"]));
   const linkByStudent=new Map(); for(const x of links)if(!linkByStudent.has(x.student_id)||x.is_primary)linkByStudent.set(x.student_id,x.coach_id);
+  if(allowed)for(const student of visibleStudents)linkByStudent.set(student.id,c.user.id);
   const packageByStudent=new Map(); for(const x of packages)if(!packageByStudent.has(x.student_id))packageByStudent.set(x.student_id,x);
   const sessionsByStudent=new Map(); for(const x of sessions){if(!sessionsByStudent.has(x.student_id))sessionsByStudent.set(x.student_id,[]);sessionsByStudent.get(x.student_id).push(x)}
   const today=new Date(), cutoff=new Date(today.getTime()+30*86400000), month=today.toISOString().slice(0,7);
@@ -64,14 +65,14 @@ module.exports=async function(req,res){
    const existing=followups.find(x=>x.student_id===student.id&&x.package_id===pkg.id);
    candidates.push({id:existing?.id||null,studentId:student.id,studentName:student.name,phone:student.phone,coachId,coachName:userMap[coachId]||"未指派",remaining:Number(pkg.remaining_sessions),expiresAt:day(pkg.expires_at),projectedFinish:projectedDays!=null?new Date(today.getTime()+projectedDays*86400000).toISOString().slice(0,10):null,probability:existing?.probability??probability,expectedAmount:Number(existing?.expected_amount||pkg.paid_amount||pkg.price||0),status:existing?.status||"pending",lastClass:completed[0]?.completed_at||completed[0]?.scheduled_at||null});
   }
-  const coachIds=[...new Set(links.filter(x=>visibleIds.has(x.student_id)).map(x=>x.coach_id))];
+  const coachIds=allowed?[c.user.id]:[...new Set(links.filter(x=>visibleIds.has(x.student_id)).map(x=>x.coach_id))];
   const coachPerformance=coachIds.map(coachId=>{
    const ids=new Set(links.filter(x=>x.coach_id===coachId&&visibleIds.has(x.student_id)).map(x=>x.student_id));
    const pkgs=packages.filter(x=>ids.has(x.student_id)), due=candidates.filter(x=>x.coachId===coachId), monthSales=sales.filter(x=>x.coach_id===coachId&&String(x.occurred_on).startsWith(month)).reduce((n,x)=>n+Number(x.amount||0),0);
    const completedMonth=sessions.filter(x=>x.coach_id===coachId&&x.status==="completed"&&String(x.completed_at||x.scheduled_at).startsWith(month)).length;
    return {coachId,coachName:userMap[coachId]||"未命名教練",students:ids.size,remaining:pkgs.reduce((n,x)=>n+Number(x.remaining_sessions||0),0),renewalDue:due.length,monthlySales:monthSales,completedSessions:completedMonth,forecast:Math.round(due.reduce((n,x)=>n+x.expectedAmount*x.probability/100,0))};
   }).sort((a,b)=>b.monthlySales-a.monthlySales);
-  const totalRemaining=coachPerformance.reduce((n,x)=>n+x.remaining,0), forecast=coachPerformance.reduce((n,x)=>n+x.forecast,0);
+  const totalRemaining=visibleStudents.reduce((n,x)=>n+Number(packageByStudent.get(x.id)?.remaining_sessions||0),0), forecast=coachPerformance.reduce((n,x)=>n+x.forecast,0);
   return res.json({metrics:{students:visibleStudents.length,totalRemaining,renewalDue:candidates.length,forecast},renewals:candidates.sort((a,b)=>a.remaining-b.remaining),coaches:coachPerformance,messageUsage:usage[0]||{sent_count:0,monthly_limit:200},preferences:preferences[0]||{class_reminders:true,renewal_reminders:true,manager_digest:managers(c),quiet_start:"21:00",quiet_end:"08:00"},rules:{remainingSessions:3,windowDays:30}});
  }catch(e){return fail(res,e)}
 };
