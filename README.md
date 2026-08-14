@@ -1,4 +1,16 @@
-# Chilling Coach OS — LINE Mini App MVP
+# Chilling Coach OS — 學生管理與續約營運系統
+
+## 2.0 功能範圍
+- 學員、電話唯一識別、方案與剩餘堂數
+- 課程、訓練計畫、身體數據、評估與目標
+- 剩餘 3 堂／30 天內到期的續約提醒
+- 主管查看各教練學員數、總剩餘堂數、本月業績與續約營收預測
+- 每日 LINE 教練提醒，具重複防護及每月訊息上限
+- 新教練申請與主管核准
+
+員工差勤、打卡、請假、薪資、獎金與 Google 班表同步已退出產品範圍。
+
+部署前依序執行 `supabase/migrations/202608140001_student_crm.sql`，並設定 `CRON_SECRET` 與可選的 `LINE_MONTHLY_MESSAGE_LIMIT`（預設 200）。
 
 > V12 / 1.0 implementation is included as additive Supabase migrations, live Mini App APIs, and a permission-scoped data Copilot. Deployment instructions: `docs/DEPLOY_V12.md`. Company/Google Sheets mapping contract: `docs/INTEGRATIONS.md`.
 

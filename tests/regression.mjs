@@ -12,6 +12,9 @@ const leaveReview=fs.readFileSync(new URL("../supabase/migrations/202608130004_o
 const html=fs.readFileSync(new URL("../index.html",import.meta.url),"utf8");
 const staffClock=fs.readFileSync(new URL("../supabase/migrations/202608130005_staff_clock_safety.sql",import.meta.url),"utf8");
 const sheetAdapter=fs.readFileSync(new URL("../supabase/migrations/202608130006_google_shift_adapter.sql",import.meta.url),"utf8");
+const studentCrm=fs.readFileSync(new URL("../supabase/migrations/202608140001_student_crm.sql",import.meta.url),"utf8");
+const crm=fs.readFileSync(new URL("../api/crm.js",import.meta.url),"utf8");
+const reminders=fs.readFileSync(new URL("../api/reminders.js",import.meta.url),"utf8");
 for(const marker of ["V6 Complete","createBooking","completeSession","complete_session_and_deduct","session_exercises","今日課表","近期預約","訓練摘要","進步多少","身體變化","最近一次評估","studentLookupMessage"])
  assert.ok(webhook.includes(marker),`V6 regression marker missing: ${marker}`);
 for(const table of ["body_measurements","student_assessments","training_templates","student_training_plans","audit_logs","role_requests"])
@@ -28,4 +31,8 @@ for(const entity of ["review_leave_request","approval_logs","write_audit_log"])a
 for(const demo of ["PT 學員</span><strong>143","預估續約率</span><strong>71%","<b>6 位</b> 高流失風險","<b>11 位</b>","<b>21 位</b>"])assert.ok(!html.includes(demo),`Demo metric must not ship: ${demo}`);
 for(const entity of ["work_logs_one_open_per_user_uidx","record_work_clock","write_audit_log"])assert.ok(staffClock.includes(entity));
 for(const entity of ["staff_external_mappings","shifts_external_ref_uidx","hills-shifts"])assert.ok(sheetAdapter.includes(entity));
+for(const removedUi of ["我的班表與工時","上班打卡","待審核請假","班表姓名配對","薪資"])assert.ok(!html.includes(removedUi),`Retired feature still visible: ${removedUi}`);
+for(const entity of ["renewal_followups","notification_preferences","notification_jobs","message_usage_monthly","capture_package_sale"])assert.ok(studentCrm.includes(entity),`Student CRM migration missing: ${entity}`);
+for(const marker of ["totalRemaining","renewalDue","monthlySales","forecast","messageUsage"])assert.ok(crm.includes(marker),`CRM API missing: ${marker}`);
+for(const marker of ["LINE_MONTHLY_MESSAGE_LIMIT","notification_jobs","daily_coach_digest","LINE_CHANNEL_ACCESS_TOKEN"])assert.ok(reminders.includes(marker),`Reminder safety missing: ${marker}`);
 console.log("V6 compatibility and V12 migration checks passed");

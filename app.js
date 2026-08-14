@@ -94,9 +94,9 @@ async function initLineAccount() {
     setRoleUI(roles);
 
     if (roles.includes("coach")) {
-      await Promise.all([loadStudents(), loadDashboard(),loadMyOperations()]);
+      await Promise.all([loadStudents(), loadDashboard(),loadCrm()]);
     }
-    if (roles.includes("manager") || roles.includes("admin")) await Promise.all([loadRoleRequests(),loadOperations(),loadSheetMappings()]);
+    if (roles.includes("manager") || roles.includes("admin")) await Promise.all([loadRoleRequests(),loadCrm()]);
 
     if (payload.created) {
       accountState.textContent = "系統帳號已建立｜目前尚未指派角色";
@@ -411,9 +411,9 @@ document.getElementById("savePackageBtn").onclick=async()=>{
   }catch(e){console.error(e);packageMessage.textContent="建立失敗，請稍後再試。";packageMessage.className="form-message error";}
 };
 
-let latestOperations=null;
+let latestCrm=null;
 function csvCell(value){return `"${String(value??"").replace(/"/g,'""')}"`}
-document.getElementById("exportBtn").onclick=()=>{if(!latestOperations)return alert("營運資料尚未載入完成。");const m=latestOperations.metrics,lines=[["月份",latestOperations.period],["本月確認業績",m.monthlySales],["本月團課",m.groupClasses],["本月一般工時",m.workHours],["本月加班時數",m.overtimeHours],[],["員工","一般工時","加班時數","核准請假時數"],...latestOperations.staff.map(x=>[x.display_name,x.work_hours,x.overtime_hours,x.leave_hours])],csv="\uFEFF"+lines.map(r=>r.map(csvCell).join(",")).join("\r\n"),a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download=`Chilling-Coach-OS-${latestOperations.period}-月報.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
+document.getElementById("exportBtn").onclick=()=>{if(!latestCrm)return alert("學生營運資料尚未載入完成。");const lines=[["教練","有效學員","總剩餘堂數","需續約人數","本月業績","本月完成課程","預估續約營收"],...latestCrm.coaches.map(x=>[x.coachName,x.students,x.remaining,x.renewalDue,x.monthlySales,x.completedSessions,x.forecast]),[],["續約學員","教練","剩餘堂數","到期日","預估金額","機率","狀態"],...latestCrm.renewals.map(x=>[x.studentName,x.coachName,x.remaining,x.expiresAt,x.expectedAmount,x.probability+"%",x.status])],csv="\uFEFF"+lines.map(r=>r.map(csvCell).join(",")).join("\r\n"),a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download=`Chilling-Coach-OS-學生營運-${new Date().toISOString().slice(0,10)}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
 
 document.getElementById("requestCoachRole").onclick=async()=>{
  const btn=document.getElementById("requestCoachRole"); btn.disabled=true;
@@ -425,6 +425,9 @@ async function loadRoleRequests(){
 }
 window.reviewRoleRequest=async(id,approve)=>{if(!confirm(approve?"確定核准此教練權限？":"確定拒絕此申請？"))return;try{await apiJson("/api/role-request-review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requestId:id,approve})});await loadRoleRequests()}catch(e){alert("審核失敗，請重新整理後再試。")}};
 document.getElementById("refreshRoleRequests").onclick=loadRoleRequests;
+
+// Retired employee attendance/payroll implementation retained in source history only.
+if(false){
 
 async function loadOperations(){
  const box=document.getElementById("leaveRequestList"); if(!box)return;
@@ -454,6 +457,20 @@ async function loadMyOperations(){
 async function clock(action){try{await apiJson("/api/operations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action})});await loadMyOperations()}catch(e){alert(action==="clock_in"?"無法上班打卡，可能已有未結束的工時。":"無法下班打卡，請確認已先上班打卡。")}}
 document.getElementById("clockInBtn").onclick=()=>clock("clock_in");document.getElementById("clockOutBtn").onclick=()=>clock("clock_out");document.getElementById("openLeaveBtn").onclick=()=>{document.getElementById("leaveMessage").textContent="";leaveDialog.showModal()};document.getElementById("closeLeaveDialog").onclick=()=>leaveDialog.close();
 document.getElementById("submitLeaveBtn").onclick=async()=>{const msg=document.getElementById("leaveMessage"),body={action:"request_leave",leaveType:document.getElementById("leaveType").value,startsAt:document.getElementById("leaveStartsAt").value,endsAt:document.getElementById("leaveEndsAt").value,reason:document.getElementById("leaveReason").value};try{msg.textContent="正在送出…";await apiJson("/api/operations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});msg.textContent="請假申請已送出。";msg.className="form-message ok";await loadMyOperations();setTimeout(()=>leaveDialog.close(),500)}catch(e){msg.textContent="送出失敗，請確認假別與時間。";msg.className="form-message error"}};
+}
+
+async function loadCrm(){
+ try{
+  const d=await apiJson("/api/crm");latestCrm=d;
+  const set=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value};
+  set("crmStudents",d.metrics.students);set("crmRemaining",d.metrics.totalRemaining);set("crmRenewals",d.metrics.renewalDue);set("crmForecast",Number(d.metrics.forecast).toLocaleString("zh-TW"));
+  set("messageUsage",`LINE 主動訊息：本月 ${d.messageUsage.sent_count} / ${d.messageUsage.monthly_limit} 則`);
+  set("crmInsight",d.renewals.length?`優先聯絡 ${d.renewals.slice(0,3).map(x=>x.studentName).join("、")}；共 ${d.renewals.length} 位進入續約區間。`:"目前沒有進入續約區間的學員。");
+  const table=document.getElementById("coachPerformanceRows");if(table)table.innerHTML=d.coaches.length?d.coaches.map(x=>`<tr><td><b>${escapeHtml(x.coachName)}</b></td><td>${x.students}</td><td>${x.remaining}</td><td>${x.renewalDue}</td><td>NT$${Number(x.monthlySales).toLocaleString("zh-TW")}</td><td>NT$${Number(x.forecast).toLocaleString("zh-TW")}</td></tr>`).join(""):`<tr><td colspan="6">目前尚無教練學員資料。</td></tr>`;
+  const box=document.getElementById("coachRenewalList");if(box){const mine=d.renewals.filter(x=>!window.chillingUser||x.coachId===window.chillingUser.id);box.innerHTML=mine.length?mine.map(x=>`<div><b>${escapeHtml(x.studentName)}｜剩 ${x.remaining} 堂</b><span>${x.expiresAt?`到期 ${escapeHtml(x.expiresAt)}｜`:""}預估 NT$${Number(x.expectedAmount).toLocaleString("zh-TW")}｜${x.probability}%</span></div>`).join(""):`<div class="muted">目前沒有需要聯絡的學員。</div>`}
+ }catch(e){console.error(e);const box=document.getElementById("coachRenewalList");if(box)box.textContent="續約資料尚未啟用，請先執行 2.0 資料庫升級。"}
+}
+document.getElementById("refreshCoachCrm").onclick=loadCrm;
 
 const trainingPlanDialog=document.getElementById("trainingPlanDialog"),trainingPlanContent=document.getElementById("trainingPlanContent");
 document.getElementById("closeTrainingPlanDialog").onclick=()=>trainingPlanDialog.close();

@@ -40,8 +40,8 @@ module.exports=async function(req,res){
       if(!(await allowed(url,headers,user.id,b.studentId)))return res.status(403).json({error:"Student not assigned"});
       const r=await fetch(`${url}/rest/v1/packages`,{method:"POST",headers:{...headers,Prefer:"return=representation"},body:JSON.stringify({
         student_id:b.studentId,coach_id:user.id,package_name:String(b.packageName||"").trim()||null,
-        purchased_sessions:sessions,remaining_sessions:sessions,price:Number(b.price||0),
-        expires_at:b.expiresAt||null,status:"active"
+        purchased_sessions:sessions,remaining_sessions:sessions,price:Number(b.price||0),paid_amount:Number(b.price||0),payment_status:"paid",
+        expires_at:b.expiresAt||null,status:"active",renewed_from_id:b.renewedFromId||null
       })});
       if(!r.ok)throw new Error(await r.text());
       return res.status(201).json({package:(await r.json())[0]});
