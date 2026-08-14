@@ -10,6 +10,7 @@ function setRoleUI(roles) {
   const roleSwitch = document.getElementById("roleSwitch");
   const coachView = document.getElementById("coachView");
   const managerView = document.getElementById("managerView");
+  const bottomNav = document.getElementById("bottomNav");
 
   const isCoach = roles.includes("coach");
   const isManager = roles.includes("manager") || roles.includes("admin");
@@ -24,12 +25,15 @@ function setRoleUI(roles) {
     managerView.classList.add("hidden");
     coachBtn.classList.add("active");
     managerBtn.classList.remove("active");
+    bottomNav.classList.remove("hidden");
   } else if (isManager) {
     coachView.classList.add("hidden");
     managerView.classList.remove("hidden");
+    bottomNav.classList.add("hidden");
   } else {
     coachView.classList.remove("hidden");
     managerView.classList.add("hidden");
+    bottomNav.classList.remove("hidden");
   }
 }
 
@@ -149,6 +153,8 @@ function render(filter="all"){
     // V4 先保留篩選器 UI；續約風險會在後續版本由真實消課資料計算
     filtered = students.filter(s => s.statusBucket === filter);
   }
+  const query=(document.getElementById("studentSearch")?.value||"").trim().toLowerCase();
+  if(query)filtered=filtered.filter(s=>String(s.name||"").toLowerCase().includes(query)||String(s.phone||"").includes(query));
 
   if(filtered.length === 0){
     studentLoadState.classList.add("empty");
@@ -233,13 +239,14 @@ async function loadStudents(){
 
 
 document.getElementById("studentFilter").onchange=e=>render(e.target.value);
+document.getElementById("studentSearch").oninput=()=>render(document.getElementById("studentFilter").value);
 const coachGuideDialog=document.getElementById("coachGuideDialog");
 document.getElementById("openCoachGuide").onclick=()=>coachGuideDialog.showModal();
 document.getElementById("closeCoachGuide").onclick=()=>coachGuideDialog.close();
 document.getElementById("closeCoachGuideBottom").onclick=()=>coachGuideDialog.close();
 const coachView=document.getElementById("coachView"), managerView=document.getElementById("managerView");
-document.getElementById("coachBtn").onclick=()=>{coachView.classList.remove("hidden");managerView.classList.add("hidden");coachBtn.classList.add("active");managerBtn.classList.remove("active")};
-document.getElementById("managerBtn").onclick=()=>{managerView.classList.remove("hidden");coachView.classList.add("hidden");managerBtn.classList.add("active");coachBtn.classList.remove("active")};
+document.getElementById("coachBtn").onclick=()=>{coachView.classList.remove("hidden");managerView.classList.add("hidden");coachBtn.classList.add("active");managerBtn.classList.remove("active");document.getElementById("bottomNav").classList.remove("hidden")};
+document.getElementById("managerBtn").onclick=()=>{managerView.classList.remove("hidden");coachView.classList.add("hidden");managerBtn.classList.add("active");coachBtn.classList.remove("active");document.getElementById("bottomNav").classList.add("hidden")};
 
 async function openStudent(s){
  currentStudent = s;
@@ -490,6 +497,7 @@ document.getElementById("submitLeaveBtn").onclick=async()=>{const msg=document.g
 async function loadCrm(){
  try{
   const d=await apiJson("/api/crm");latestCrm=d;
+  [["dataStudents",d.metrics.students],["dataRemaining",d.metrics.totalRemaining],["dataRenewals",d.metrics.renewalDue],["dataForecast",Number(d.metrics.forecast||0).toLocaleString("zh-TW")]].forEach(([id,value])=>{const el=document.getElementById(id);if(el)el.textContent=value});
   const set=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value};
   set("crmStudents",d.metrics.students);set("crmRemaining",d.metrics.totalRemaining);set("crmRenewals",d.metrics.renewalDue);set("crmForecast",Number(d.metrics.forecast).toLocaleString("zh-TW"));
   set("messageUsage",`LINE 主動訊息：本月 ${d.messageUsage.sent_count} / ${d.messageUsage.monthly_limit} 則`);
@@ -510,3 +518,51 @@ window.cancelTrainingPlan=async id=>{const reason=prompt("請輸入取消計畫�
 window.editWorkoutDate=async(id,current)=>{const plannedFor=prompt("請輸入新的日期（YYYY-MM-DD）：",current);if(!plannedFor||plannedFor===current)return;const reason=prompt("請輸入修改日期的原因：");if(!reason)return;try{await apiJson("/api/training-plans",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"update_workout",workoutId:id,plannedFor,reason})});await loadTrainingPlans()}catch(e){alert(e.message)}};
 async function assignTemplate(){const templateId=document.getElementById("planTemplate").value,startsOn=document.getElementById("planStartsOn").value,msg=document.getElementById("trainingPlanMessage");if(!templateId||!startsOn){msg.textContent="請選擇模板與開始日期。";return}try{await apiJson("/api/training-plans",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"assign",studentId:currentStudent.id,templateId,startsOn})});await loadTrainingPlans()}catch(e){msg.textContent="指派失敗，請確認日期沒有重複計畫。"}}
 async function createTemplate(){const msg=document.getElementById("trainingPlanMessage"),lines=document.getElementById("templateItems").value.split(/\n/).filter(Boolean),items=lines.map(x=>{const p=x.split(",").map(v=>v.trim());return{weekNo:Number(p[0]),dayNo:Number(p[1]),exerciseName:p[2],sets:Number(p[3]),reps:p[4],rpe:p[5]?Number(p[5].replace(/rpe/i,"")):null}}).filter(x=>x.exerciseName),name=document.getElementById("templateName").value.trim();if(!name||!items.length){msg.textContent="請輸入模板名稱與至少一個動作。";return}try{await apiJson("/api/training-plans",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"create_template",name,goal:document.getElementById("templateGoal").value,weeks:Number(document.getElementById("templateWeeks").value),items})});await loadTrainingPlans()}catch(e){msg.textContent="模板建立失敗，請確認格式與動作名稱。"}}
+
+// ===== Mini App navigation and course management =====
+let courseRange="today", courseRows=[], editingCourse=null;
+const courseDialog=document.getElementById("courseDialog"), courseMessage=document.getElementById("courseMessage");
+function showCoachTab(tab){
+ document.querySelectorAll("[data-coach-panel]").forEach(x=>x.classList.toggle("hidden",x.dataset.coachPanel!==tab));
+ document.querySelectorAll("[data-coach-tab]").forEach(x=>x.classList.toggle("active",x.dataset.coachTab===tab));
+ window.scrollTo({top:0,behavior:"smooth"});
+ if(tab==="courses")loadCourses(courseRange);if(tab==="data")loadCrm();
+}
+document.querySelectorAll("[data-coach-tab]").forEach(x=>x.onclick=()=>showCoachTab(x.dataset.coachTab));
+document.getElementById("overviewAllCourses").onclick=()=>showCoachTab("courses");
+document.getElementById("overviewAddCourse").onclick=()=>{showCoachTab("courses");openCourseDialog()};
+document.getElementById("refreshData").onclick=()=>Promise.all([loadDashboard(),loadCrm()]);
+
+function courseBounds(range){
+ const now=new Date(), start=new Date(now), end=new Date(now);start.setHours(0,0,0,0);end.setHours(23,59,59,999);
+ if(range==="7")end.setDate(end.getDate()+7);else if(range==="30")end.setDate(end.getDate()+30);else if(range==="past")start.setDate(start.getDate()-30);
+ return {from:start.toISOString(),to:end.toISOString()};
+}
+function courseDate(iso){return new Intl.DateTimeFormat("zh-TW",{timeZone:"Asia/Taipei",month:"numeric",day:"numeric",weekday:"short",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(iso))}
+function renderCourses(){
+ const box=document.getElementById("courseList"), state=document.getElementById("courseLoadState");state.style.display="none";
+ if(!courseRows.length){box.innerHTML='<div class="load-state empty">這個期間沒有課程。點「＋ 新增課程」即可安排。</div>';return}
+ const labels={scheduled:"已預約",completed:"已完成",cancelled:"已取消"};
+ box.innerHTML=courseRows.map(x=>`<article class="card course-row"><div><b>${escapeHtml(x.student_name)}</b><span>${courseDate(x.scheduled_at)}｜${labels[x.status]||x.status}</span></div><div class="course-actions">${x.status==="scheduled"?`<button onclick="editCourse('${x.id}')">改期</button><button onclick="completeCourse('${x.id}')">完成</button><button class="danger-link" onclick="cancelCourse('${x.id}')">取消</button>`:x.status==="completed"?`<button onclick="restoreCourse('${x.id}')">復原完成</button>`:""}</div></article>`).join("");
+}
+async function loadCourses(range=courseRange){
+ courseRange=range;document.querySelectorAll("[data-course-range]").forEach(x=>x.classList.toggle("active",x.dataset.courseRange===range));
+ const state=document.getElementById("courseLoadState");state.style.display="block";state.textContent="正在載入課程…";document.getElementById("courseList").innerHTML="";
+ try{const b=courseBounds(range),d=await apiJson(`/api/dashboard?scope=sessions&from=${encodeURIComponent(b.from)}&to=${encodeURIComponent(b.to)}`);courseRows=d.sessions||[];renderCourses()}catch(e){state.textContent=`課程載入失敗：${e.message}`;state.className="load-state error"}
+}
+document.querySelectorAll("[data-course-range]").forEach(x=>x.onclick=()=>loadCourses(x.dataset.courseRange));
+function openCourseDialog(row=null){
+ editingCourse=row;courseMessage.textContent="";document.getElementById("courseDialogTitle").textContent=row?"課程改期":"新增課程";document.getElementById("saveCourse").textContent=row?"儲存新時間":"建立課程";
+ const select=document.getElementById("courseStudent");select.innerHTML='<option value="">選擇學員</option>'+students.filter(x=>x.status==="active").map(x=>`<option value="${x.id}">${escapeHtml(x.name)}${x.phone?`（${escapeHtml(x.phone.slice(-4))}）`:""}</option>`).join("");select.disabled=!!row;select.value=row?.student_id||"";
+ const initial=row?new Date(row.scheduled_at):new Date(Date.now()+3600000);initial.setMinutes(Math.ceil(initial.getMinutes()/15)*15,0,0);document.getElementById("courseTime").value=localDateTime(initial.toISOString());document.getElementById("courseReason").value="";document.getElementById("courseReasonRow").classList.toggle("hidden",!row);courseDialog.showModal();
+}
+document.getElementById("addCourse").onclick=()=>openCourseDialog();document.getElementById("closeCourseDialog").onclick=()=>courseDialog.close();
+document.getElementById("saveCourse").onclick=async()=>{
+ const btn=document.getElementById("saveCourse"),studentId=document.getElementById("courseStudent").value,scheduledAt=document.getElementById("courseTime").value,reason=document.getElementById("courseReason").value.trim();
+ if(!studentId||!scheduledAt||editingCourse&&!reason){courseMessage.textContent=editingCourse?"學員、時間與改期原因都要填寫。":"請選擇學員與上課時間。";courseMessage.className="form-message error";return}
+ btn.disabled=true;btn.textContent="儲存中…";try{await apiJson("/api/dashboard",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:editingCourse?"update_session":"create_session",sessionId:editingCourse?.id,studentId,scheduledAt:new Date(scheduledAt).toISOString(),reason})});courseDialog.close();await Promise.all([loadCourses(courseRange),loadDashboard()])}catch(e){courseMessage.textContent=e.message;courseMessage.className="form-message error"}finally{btn.disabled=false;btn.textContent=editingCourse?"儲存新時間":"建立課程"}
+};
+window.editCourse=id=>{const row=courseRows.find(x=>x.id===id);if(row)openCourseDialog(row)};
+window.completeCourse=async id=>{const row=courseRows.find(x=>x.id===id);if(!row||!confirm(`確認「${row.student_name}」已完成這堂課？完成後會扣除一堂。`))return;try{await apiJson("/api/dashboard",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"complete_session",sessionId:id})});await Promise.all([loadCourses(courseRange),loadDashboard(),loadCrm()])}catch(e){alert(`完成失敗：${e.message}`)}};
+window.cancelCourse=async id=>{const row=courseRows.find(x=>x.id===id),reason=prompt(`請輸入取消「${row?.student_name||"學員"}」課程的原因：`);if(!reason)return;if(!confirm("確定取消？取消不會扣堂。"))return;try{await apiJson("/api/dashboard",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"cancel_session",sessionId:id,reason})});await Promise.all([loadCourses(courseRange),loadDashboard()])}catch(e){alert(`取消失敗：${e.message}`)}};
+window.restoreCourse=async id=>{const row=courseRows.find(x=>x.id===id),reason=prompt(`請輸入復原「${row?.student_name||"學員"}」完成狀態的原因：`);if(!reason)return;if(!confirm("確定復原？系統會補回一堂。"))return;try{await apiJson("/api/dashboard",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"restore_session",sessionId:id,reason})});await Promise.all([loadCourses(courseRange),loadDashboard(),loadCrm()])}catch(e){alert(`復原失敗：${e.message}`)}};

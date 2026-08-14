@@ -25,6 +25,7 @@
 
     <main>
       <section id="coachView">
+        <div class="coach-tab-panel" data-coach-panel="overview">
         <div class="hero">
           <div>
             <div class="muted" id="lineGreeting">LINE 身分讀取中…</div>
@@ -32,7 +33,7 @@
             <button class="secondary hidden" id="requestCoachRole" type="button">申請教練權限</button>
             <h2>今天先處理最需要注意的學生</h2>
           </div>
-          <button class="primary" id="addStudent">＋ 新增學員</button>
+          <button class="primary" id="overviewAddCourse" type="button">＋ 新增課程</button>
         </div>
 
         <div class="kpis four">
@@ -42,31 +43,38 @@
           <div class="card metric risk"><span>逾時待完成</span><strong id="pendingSessions">—</strong><small>堂</small></div>
         </div>
 
+        <div class="section-head"><div><div class="eyebrow">TODAY</div><h3>今日上課</h3></div><button class="secondary" id="overviewAllCourses" type="button">查看全部課程</button></div>
+        <div class="card today" id="todaySchedule"><div class="load-state">正在載入今日課表…</div></div>
+        <div class="section-head"><div><div class="eyebrow">RENEWAL</div><h3>我的續約待辦</h3></div><button class="secondary" id="refreshCoachCrm" type="button">重新整理</button></div>
+        <div class="card"><div id="coachRenewalList" class="compact-list"><div class="load-state">正在整理續約名單…</div></div></div>
+        </div>
+
+        <div class="coach-tab-panel hidden" data-coach-panel="students">
+        <div class="hero"><div><div class="eyebrow">STUDENTS</div><h2>我的學員</h2></div><button class="primary" id="addStudent">＋ 新增學員</button></div>
+        <div class="student-tools"><input id="studentSearch" class="text-input" type="search" placeholder="搜尋姓名或電話末四碼" />
+        <select id="studentFilter" class="text-input"><option value="all">全部</option><option value="renewal">即將續約</option><option value="risk">高風險</option><option value="stable">穩定</option></select></div>
         <div class="section-head">
           <div>
             <div class="eyebrow">PRIORITY</div>
             <h3>即將續約 / 流失風險</h3>
           </div>
-          <select id="studentFilter">
-            <option value="all">全部</option>
-            <option value="renewal">即將續約</option>
-            <option value="risk">高風險</option>
-            <option value="stable">穩定</option>
-          </select>
         </div>
 
         <div id="studentLoadState" class="load-state">正在載入你的學員…</div>
         <div id="studentList" class="student-grid"></div>
 
-        <div class="section-head">
-          <div>
-            <div class="eyebrow">TODAY</div>
-            <h3>今日上課</h3>
-          </div>
         </div>
-        <div class="card today" id="todaySchedule"><div class="load-state">正在載入今日課表…</div></div>
-        <div class="section-head"><div><div class="eyebrow">RENEWAL</div><h3>我的續約待辦</h3></div><button class="secondary" id="refreshCoachCrm" type="button">重新整理</button></div>
-        <div class="card"><div id="coachRenewalList" class="compact-list"><div class="load-state">正在整理續約名單…</div></div></div>
+
+        <div class="coach-tab-panel hidden" data-coach-panel="courses">
+          <div class="hero"><div><div class="eyebrow">COURSES</div><h2>課程管理</h2><div class="muted">直接新增、改期、取消、完成或復原課程。</div></div><button class="primary" id="addCourse" type="button">＋ 新增課程</button></div>
+          <div class="course-tools"><button class="secondary active" data-course-range="today">今天</button><button class="secondary" data-course-range="7">未來 7 天</button><button class="secondary" data-course-range="30">未來 30 天</button><button class="secondary" data-course-range="past">近 30 天</button></div>
+          <div id="courseLoadState" class="load-state">點選期間以載入課程。</div>
+          <div id="courseList" class="course-list"></div>
+        </div>
+
+        <div class="coach-tab-panel hidden" data-coach-panel="data">
+        <div class="hero"><div><div class="eyebrow">DATA</div><h2>我的數據</h2></div><button class="secondary" id="refreshData" type="button">重新整理</button></div>
+        <div class="kpis four data-kpis"><div class="card metric"><span>有效學員</span><strong id="dataStudents">—</strong><small>人</small></div><div class="card metric"><span>總剩餘堂數</span><strong id="dataRemaining">—</strong><small>堂</small></div><div class="card metric risk"><span>需續約</span><strong id="dataRenewals">—</strong><small>人</small></div><div class="card metric"><span>預估續約金額</span><strong id="dataForecast">—</strong><small>NTD</small></div></div>
         <div class="section-head"><div><div class="eyebrow">REMINDERS</div><h3>提醒設定</h3></div></div>
         <div class="card preference-card">
           <label><input id="prefClasses" type="checkbox" checked /> 每天提醒未來 24 小時課程</label>
@@ -77,6 +85,7 @@
         </div>
         <div class="section-head"><div><div class="eyebrow">AI COPILOT</div><h3>教練資料助理</h3></div></div>
         <div class="card copilot-card"><textarea id="copilotQuery" class="text-input textarea-input" maxlength="500" placeholder="例如：測試學員A 最近進步怎樣？"></textarea><button class="primary" id="askCopilot" type="button">查詢資料</button><div id="copilotAnswer" class="callout">Copilot 只使用你有權限查看的已儲存資料。</div></div>
+        </div>
       </section>
 
       <section id="managerView" class="hidden">
@@ -123,8 +132,8 @@
       </section>
     </main>
 
-    <nav class="bottom-nav">
-      <button class="active">總覽</button><button>學員</button><button>課程</button><button>數據</button>
+    <nav class="bottom-nav" id="bottomNav">
+      <button class="active" data-coach-tab="overview">總覽</button><button data-coach-tab="students">學員</button><button data-coach-tab="courses">課程</button><button data-coach-tab="data">數據</button>
     </nav>
   </div>
 
@@ -205,6 +214,12 @@
 
   <dialog id="healthDialog"><div class="dialog-card"><button class="x" id="closeHealthDialog" type="button">×</button><div class="eyebrow">HEALTH PROFILE</div><h2 id="healthDialogTitle">新增紀錄</h2><div id="healthForm"></div><div id="healthMessage" class="form-message"></div><button class="primary full" id="saveHealthBtn" type="button">儲存</button></div></dialog>
   <dialog id="trainingPlanDialog"><div class="dialog-card student-profile-card"><button class="x" id="closeTrainingPlanDialog" type="button">×</button><div class="eyebrow">TRAINING PLAN</div><h2>訓練計畫</h2><div id="trainingPlanContent"></div></div></dialog>
+  <dialog id="courseDialog"><div class="dialog-card"><button class="x" id="closeCourseDialog" type="button">×</button><div class="eyebrow">COURSE</div><h2 id="courseDialogTitle">新增課程</h2>
+    <label class="field-label" for="courseStudent">學員 *</label><select id="courseStudent" class="text-input"></select>
+    <label class="field-label" for="courseTime">上課日期與時間 *</label><input id="courseTime" class="text-input" type="datetime-local" />
+    <div id="courseReasonRow" class="hidden"><label class="field-label" for="courseReason">改期原因 *</label><textarea id="courseReason" class="text-input textarea-input" maxlength="300" placeholder="例如：學員臨時調整時間"></textarea></div>
+    <div class="callout course-help">預約時不扣堂；按「完成」後才會扣除一堂。相同時段不可重複預約。</div><div id="courseMessage" class="form-message"></div><button class="primary full" id="saveCourse" type="button">建立課程</button>
+  </div></dialog>
   <dialog id="coachGuideDialog"><div class="dialog-card guide-card"><button class="x" id="closeCoachGuide" type="button">×</button><div class="eyebrow">QUICK START</div><h2>教練快速使用說明</h2>
     <div class="guide-callout"><b>第一次使用</b><br>從官方帳號開啟 Mini App → 送出教練權限申請 → 等主管核准。核准後重新開啟即可使用。</div>
     <nav class="guide-nav"><a href="#guideStudent">學員</a><a href="#guidePackage">方案</a><a href="#guideClass">課程</a><a href="#guideRecord">紀錄</a><a href="#guideBot">Bot</a></nav>
