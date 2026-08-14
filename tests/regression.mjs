@@ -13,6 +13,7 @@ const staffClock=fs.readFileSync(new URL("../supabase/migrations/202608130005_st
 const sheetAdapter=fs.readFileSync(new URL("../supabase/migrations/202608130006_google_shift_adapter.sql",import.meta.url),"utf8");
 const studentCrm=fs.readFileSync(new URL("../supabase/migrations/202608140001_student_crm.sql",import.meta.url),"utf8");
 const crm=fs.readFileSync(new URL("../api/crm.js",import.meta.url),"utf8");
+const studentsApi=fs.readFileSync(new URL("../api/students.js",import.meta.url),"utf8");
 const reminders=fs.readFileSync(new URL("../lib/reminders.js",import.meta.url),"utf8");
 const corrections=fs.readFileSync(new URL("../supabase/migrations/202608140002_record_corrections.sql",import.meta.url),"utf8");
 for(const marker of ["V6 Complete","createBooking","completeSession","complete_session_and_deduct","session_exercises","今日課表","近期預約","訓練摘要","進步多少","身體變化","最近一次評估","studentLookupMessage"])
@@ -36,4 +37,5 @@ for(const marker of ["totalRemaining","renewalDue","monthlySales","forecast","me
 for(const marker of ["LINE_MONTHLY_MESSAGE_LIMIT","notification_jobs","daily_coach_digest","weekly_manager_digest","LINE_CHANNEL_ACCESS_TOKEN"])assert.ok(reminders.includes(marker),`Reminder engine missing: ${marker}`);
 for(const marker of ["adjust_package_sessions","reopen_session_and_restore","package_adjustments","voided_at","write_audit_log"])assert.ok(corrections.includes(marker),`Correction migration missing: ${marker}`);
 for(const marker of ["update_preferences","restore_session","voided_at=is.null"])assert.ok(crm.includes(marker),`CRM correction marker missing: ${marker}`);
+for(const marker of ['req.query.scope||"coach"','coach_students?coach_id=eq.'])assert.ok(studentsApi.includes(marker),`Coach roster scoping missing: ${marker}`);
 console.log("V6 compatibility and V12 migration checks passed");

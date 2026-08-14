@@ -9,7 +9,10 @@ module.exports=async function(req,res){try{
  const c=await context(req,["coach","manager","admin"]);
  if(req.method==="GET"){
   let query="students?archived_at=is.null&select=id,name,phone,status,joined_at,note,birthday,gender,tags,created_at&order=created_at.desc";
-  if(!isManager(c)){const links=await rows(c.url,c.headers,`coach_students?coach_id=eq.${c.user.id}&ended_at=is.null&select=student_id`),ids=links.map(x=>x.student_id);if(!ids.length)return res.json({students:[]});query=`students?id=in.(${encodeURIComponent(ids.map(x=>`"${x}"`).join(","))})&archived_at=is.null&select=id,name,phone,status,joined_at,note,birthday,gender,tags,created_at&order=created_at.desc`;}
+  // A dual-role manager/coach must still see only their own roster in Coach View.
+  // All-student access is returned only when Manager View explicitly requests it.
+  const coachScope=c.roles.includes("coach")&&String(req.query.scope||"coach")!=="manager";
+  if(coachScope||!isManager(c)){const links=await rows(c.url,c.headers,`coach_students?coach_id=eq.${c.user.id}&ended_at=is.null&select=student_id`),ids=links.map(x=>x.student_id);if(!ids.length)return res.json({students:[]});query=`students?id=in.(${encodeURIComponent(ids.map(x=>`"${x}"`).join(","))})&archived_at=is.null&select=id,name,phone,status,joined_at,note,birthday,gender,tags,created_at&order=created_at.desc`;}
   return res.json({students:await rows(c.url,c.headers,query)});
  }
  const b=req.body||{};
