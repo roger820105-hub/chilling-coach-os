@@ -14,9 +14,12 @@
         <h1>Chilling Coach OS</h1>
         <div class="line-status" id="lineStatus">正在連線 LINE…</div>
       </div>
-      <div class="role-switch hidden" id="roleSwitch">
-        <button id="coachBtn" class="active">教練端</button>
-        <button id="managerBtn">主管端</button>
+      <div class="top-actions">
+        <button class="help-button" id="openCoachGuide" type="button">？ 使用說明</button>
+        <div class="role-switch hidden" id="roleSwitch">
+          <button id="coachBtn" class="active">教練端</button>
+          <button id="managerBtn">主管端</button>
+        </div>
       </div>
     </header>
 
@@ -202,6 +205,18 @@
 
   <dialog id="healthDialog"><div class="dialog-card"><button class="x" id="closeHealthDialog" type="button">×</button><div class="eyebrow">HEALTH PROFILE</div><h2 id="healthDialogTitle">新增紀錄</h2><div id="healthForm"></div><div id="healthMessage" class="form-message"></div><button class="primary full" id="saveHealthBtn" type="button">儲存</button></div></dialog>
   <dialog id="trainingPlanDialog"><div class="dialog-card student-profile-card"><button class="x" id="closeTrainingPlanDialog" type="button">×</button><div class="eyebrow">TRAINING PLAN</div><h2>訓練計畫</h2><div id="trainingPlanContent"></div></div></dialog>
+  <dialog id="coachGuideDialog"><div class="dialog-card guide-card"><button class="x" id="closeCoachGuide" type="button">×</button><div class="eyebrow">QUICK START</div><h2>教練快速使用說明</h2>
+    <div class="guide-callout"><b>第一次使用</b><br>從官方帳號開啟 Mini App → 送出教練權限申請 → 等主管核准。核准後重新開啟即可使用。</div>
+    <nav class="guide-nav"><a href="#guideStudent">學員</a><a href="#guidePackage">方案</a><a href="#guideClass">課程</a><a href="#guideRecord">紀錄</a><a href="#guideBot">Bot</a></nav>
+    <section id="guideStudent" class="guide-section"><span>1</span><div><h3>建立與管理學員</h3><p>點「＋ 新增學員」，輸入姓名、電話與備註。電話是辨識同名學員的重要依據，系統會阻止重複電話。</p><p>點學員卡片 →「編輯基本資料」，可修改姓名、電話、生日、狀態、標籤與備註。</p></div></section>
+    <section id="guidePackage" class="guide-section"><span>2</span><div><h3>建立與修正方案</h3><p>進入學員 →「＋ 建立課程方案」，填寫購買堂數、金額與到期日。</p><p>輸入錯誤時點「修正方案」。剩餘堂數不能大於購買堂數，修改原因必填，系統會保留紀錄。</p></div></section>
+    <section id="guideClass" class="guide-section"><span>3</span><div><h3>預約與完成課程</h3><p>可在 LINE Bot 輸入「8/15 15:00 王小明 預約上課」。預約不扣堂，完成上課才扣一堂。</p><p>若誤按完成，可在學員的課程紀錄點「復原並補回堂數」。</p></div></section>
+    <section id="guideRecord" class="guide-section"><span>4</span><div><h3>訓練與身體紀錄</h3><p>學員頁可新增身體數據、評估、目標及訓練計畫；輸入錯誤可編輯，過期紀錄可封存，不會直接刪除。</p></div></section>
+    <section id="guideRenewal" class="guide-section"><span>5</span><div><h3>續約與提醒</h3><p>剩餘 3 堂以下或 30 天內到期會進入續約待辦。可在「提醒設定」決定是否接收上課與續約推播。</p></div></section>
+    <section id="guideBot" class="guide-section"><span>6</span><div><h3>LINE Bot 常用指令</h3><div class="command-list"><code>今日課表</code><code>近期預約</code><code>王小明剩幾堂</code><code>王小明 最近訓練</code><code>王小明 身體變化</code><code>王小明 本週課表</code><code>王小明 完成上課</code></div><p>遇到同名學員時，加上電話末四碼，例如「王小明 5678 身體數據」。</p></div></section>
+    <div class="guide-warning"><b>請特別注意</b><ul><li>完成上課才會扣堂。</li><li>修正堂數與復原課程都要填寫原因。</li><li>不要建立重複學員；同名可以，但電話不可相同。</li><li>看不到學生時，先確認主管是否已把學生指派給你。</li></ul></div>
+    <button class="primary full" id="closeCoachGuideBottom" type="button">我知道了，開始使用</button>
+  </div></dialog>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="app.js"></script>
 </body>

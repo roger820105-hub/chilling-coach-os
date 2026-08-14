@@ -233,6 +233,10 @@ async function loadStudents(){
 
 
 document.getElementById("studentFilter").onchange=e=>render(e.target.value);
+const coachGuideDialog=document.getElementById("coachGuideDialog");
+document.getElementById("openCoachGuide").onclick=()=>coachGuideDialog.showModal();
+document.getElementById("closeCoachGuide").onclick=()=>coachGuideDialog.close();
+document.getElementById("closeCoachGuideBottom").onclick=()=>coachGuideDialog.close();
 const coachView=document.getElementById("coachView"), managerView=document.getElementById("managerView");
 document.getElementById("coachBtn").onclick=()=>{coachView.classList.remove("hidden");managerView.classList.add("hidden");coachBtn.classList.add("active");managerBtn.classList.remove("active")};
 document.getElementById("managerBtn").onclick=()=>{managerView.classList.remove("hidden");coachView.classList.add("hidden");managerBtn.classList.add("active");coachBtn.classList.remove("active")};

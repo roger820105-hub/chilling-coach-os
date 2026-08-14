@@ -32,6 +32,7 @@ for(const demo of ["PT 學員</span><strong>143","預估續約率</span><strong>
 for(const entity of ["work_logs_one_open_per_user_uidx","record_work_clock","write_audit_log"])assert.ok(staffClock.includes(entity));
 for(const entity of ["staff_external_mappings","shifts_external_ref_uidx","hills-shifts"])assert.ok(sheetAdapter.includes(entity));
 for(const removedUi of ["我的班表與工時","上班打卡","待審核請假","班表姓名配對","薪資"])assert.ok(!html.includes(removedUi),`Retired feature still visible: ${removedUi}`);
+for(const guideItem of ["教練快速使用說明","建立與管理學員","建立與修正方案","LINE Bot 常用指令","電話末四碼"])assert.ok(html.includes(guideItem),`Coach guide missing: ${guideItem}`);
 for(const entity of ["renewal_followups","notification_preferences","notification_jobs","message_usage_monthly","capture_package_sale"])assert.ok(studentCrm.includes(entity),`Student CRM migration missing: ${entity}`);
 for(const marker of ["totalRemaining","renewalDue","monthlySales","forecast","messageUsage"])assert.ok(crm.includes(marker),`CRM API missing: ${marker}`);
 for(const marker of ["LINE_MONTHLY_MESSAGE_LIMIT","notification_jobs","daily_coach_digest","weekly_manager_digest","LINE_CHANNEL_ACCESS_TOKEN"])assert.ok(reminders.includes(marker),`Reminder engine missing: ${marker}`);
