@@ -11,6 +11,7 @@ function setRoleUI(roles) {
   const coachView = document.getElementById("coachView");
   const managerView = document.getElementById("managerView");
   const bottomNav = document.getElementById("bottomNav");
+  const managerBottomNav = document.getElementById("managerBottomNav");
 
   const isCoach = roles.includes("coach");
   const isManager = roles.includes("manager") || roles.includes("admin");
@@ -26,14 +27,16 @@ function setRoleUI(roles) {
     coachBtn.classList.add("active");
     managerBtn.classList.remove("active");
     bottomNav.classList.remove("hidden");
+    managerBottomNav.classList.add("hidden");
   } else if (isManager) {
     coachView.classList.add("hidden");
     managerView.classList.remove("hidden");
-    bottomNav.classList.add("hidden");
+    bottomNav.classList.add("hidden");managerBottomNav.classList.remove("hidden");
   } else {
     coachView.classList.remove("hidden");
     managerView.classList.add("hidden");
     bottomNav.classList.remove("hidden");
+    managerBottomNav.classList.add("hidden");
   }
 }
 
@@ -245,8 +248,8 @@ document.getElementById("openCoachGuide").onclick=()=>coachGuideDialog.showModal
 document.getElementById("closeCoachGuide").onclick=()=>coachGuideDialog.close();
 document.getElementById("closeCoachGuideBottom").onclick=()=>coachGuideDialog.close();
 const coachView=document.getElementById("coachView"), managerView=document.getElementById("managerView");
-document.getElementById("coachBtn").onclick=()=>{coachView.classList.remove("hidden");managerView.classList.add("hidden");coachBtn.classList.add("active");managerBtn.classList.remove("active");document.getElementById("bottomNav").classList.remove("hidden");loadCrm("coach")};
-document.getElementById("managerBtn").onclick=()=>{managerView.classList.remove("hidden");coachView.classList.add("hidden");managerBtn.classList.add("active");coachBtn.classList.remove("active");document.getElementById("bottomNav").classList.add("hidden");Promise.all([loadCrm("manager"),loadPermissionUsers()])};
+document.getElementById("coachBtn").onclick=()=>{coachView.classList.remove("hidden");managerView.classList.add("hidden");coachBtn.classList.add("active");managerBtn.classList.remove("active");document.getElementById("bottomNav").classList.remove("hidden");document.getElementById("managerBottomNav").classList.add("hidden");loadCrm("coach")};
+document.getElementById("managerBtn").onclick=()=>{managerView.classList.remove("hidden");coachView.classList.add("hidden");managerBtn.classList.add("active");coachBtn.classList.remove("active");document.getElementById("bottomNav").classList.add("hidden");document.getElementById("managerBottomNav").classList.remove("hidden");showManagerTab("overview")};
 
 async function openStudent(s){
  currentStudent = s;
@@ -511,10 +514,25 @@ async function loadCrm(scope="coach"){
   set("crmInsight",d.renewals.length?`優先聯絡 ${d.renewals.slice(0,3).map(x=>x.studentName).join("、")}；共 ${d.renewals.length} 位進入續約區間。`:"目前沒有進入續約區間的學員。");
   const table=document.getElementById("coachPerformanceRows");if(table)table.innerHTML=d.coaches.length?d.coaches.map(x=>`<tr><td><b>${escapeHtml(x.coachName)}</b></td><td>${x.students}</td><td>${x.remaining}</td><td>${x.renewalDue}</td><td>NT$${Number(x.monthlySales).toLocaleString("zh-TW")}</td><td>NT$${Number(x.forecast).toLocaleString("zh-TW")}</td></tr>`).join(""):`<tr><td colspan="6">目前尚無教練學員資料。</td></tr>`;
   const box=document.getElementById("coachRenewalList");if(box){const mine=d.renewals.filter(x=>!window.chillingUser||x.coachId===window.chillingUser.id);box.innerHTML=mine.length?mine.map(x=>`<div><b>${escapeHtml(x.studentName)}｜剩 ${x.remaining} 堂</b><span>${x.expiresAt?`到期 ${escapeHtml(x.expiresAt)}｜`:""}預估 NT$${Number(x.expectedAmount).toLocaleString("zh-TW")}｜${x.probability}%</span></div>`).join(""):`<div class="muted">目前沒有需要聯絡的學員。</div>`}
+  if(scope==="manager")renderManagerRenewals(d.renewals||[]);
  }catch(e){console.error(e);const box=document.getElementById("coachRenewalList");if(box)box.textContent="續約資料尚未啟用，請先執行 2.0 資料庫升級。"}
 }
 document.getElementById("refreshCoachCrm").onclick=()=>loadCrm("coach");
 document.getElementById("saveReminderPreferences").onclick=async()=>{const btn=document.getElementById("saveReminderPreferences"),msg=document.getElementById("preferenceMessage");btn.disabled=true;msg.textContent="儲存中…";try{await apiJson("/api/crm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"update_preferences",classReminders:document.getElementById("prefClasses").checked,renewalReminders:document.getElementById("prefRenewals").checked,managerDigest:document.getElementById("prefManager").checked,quietStart:document.getElementById("prefQuietStart").value,quietEnd:document.getElementById("prefQuietEnd").value})});msg.textContent="已儲存";msg.className="form-message ok"}catch(e){msg.textContent=e.message;msg.className="form-message error"}finally{btn.disabled=false}};
+
+let managerStudents=[];
+function showManagerTab(tab){
+ document.querySelectorAll("[data-manager-panel]").forEach(x=>x.classList.toggle("hidden",x.dataset.managerPanel!==tab));document.querySelectorAll("[data-manager-tab]").forEach(x=>x.classList.toggle("active",x.dataset.managerTab===tab));window.scrollTo({top:0,behavior:"smooth"});
+ if(tab==="overview")loadCrm("manager");if(tab==="coaches")Promise.all([loadCrm("manager"),loadRoleRequests(),loadPermissionUsers()]);if(tab==="students")loadManagerStudents();if(tab==="renewals")loadCrm("manager");
+}
+document.querySelectorAll("[data-manager-tab]").forEach(x=>x.onclick=()=>showManagerTab(x.dataset.managerTab));
+async function loadManagerStudents(){const state=document.getElementById("managerStudentLoadState");state.style.display="block";state.textContent="正在載入全公司學員…";try{const d=await apiJson("/api/students?scope=manager");managerStudents=d.students||[];renderManagerStudents()}catch(e){state.textContent=`學員載入失敗：${e.message}`;state.className="load-state error"}}
+function renderManagerStudents(){const box=document.getElementById("managerStudentList"),state=document.getElementById("managerStudentLoadState"),q=(document.getElementById("managerStudentSearch").value||"").trim().toLowerCase(),found=managerStudents.filter(x=>!q||String(x.name||"").toLowerCase().includes(q)||String(x.phone||"").includes(q));state.style.display=found.length?"none":"block";if(!found.length){state.textContent="沒有符合條件的學員。";box.innerHTML="";return}box.innerHTML=found.map(x=>`<button class="card manager-student-card" type="button" onclick="openManagerStudent('${x.id}')"><b>${escapeHtml(x.name)}</b><span>${x.phone?`電話末四碼 ${escapeHtml(x.phone.slice(-4))}`:"未填電話"}｜${x.status==="active"?"進行中":x.status==="paused"?"暫停":"停用"}</span></button>`).join("")}
+document.getElementById("managerStudentSearch").oninput=renderManagerStudents;
+window.openManagerStudent=id=>{const s=managerStudents.find(x=>x.id===id);if(s)openStudent(s)};
+function renderManagerRenewals(items){const box=document.getElementById("managerRenewalList");if(!box)return;const labels={pending:"待聯絡",contacted:"已聯絡",interested:"有意願",confirmed:"已確認",renewed:"已續約",lost:"未續約"};box.innerHTML=items.length?items.map(x=>`<div class="card renewal-manager-row"><div><b>${escapeHtml(x.studentName)}｜${escapeHtml(x.coachName)}</b><span>剩 ${x.remaining} 堂${x.expiresAt?`｜${escapeHtml(x.expiresAt)} 到期`:""}｜預估 NT$${Number(x.expectedAmount||0).toLocaleString("zh-TW")}</span></div><select class="text-input" onchange="updateRenewalStatus('${x.id||""}',this.value,this,'${x.studentId}','${x.packageId||""}','${x.coachId}',${Number(x.probability||40)},${Number(x.expectedAmount||0)})">${Object.entries(labels).map(([v,l])=>`<option value="${v}" ${x.status===v?"selected":""}>${l}</option>`).join("")}</select></div>`).join(""):'<div class="load-state empty">目前沒有進入續約區間的學員。</div>'}
+window.updateRenewalStatus=async(id,status,el,studentId,packageId,coachId,probability,expectedAmount)=>{el.disabled=true;try{await apiJson("/api/crm?scope=manager",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,status,studentId,packageId,coachId,probability,expectedAmount})});await loadCrm("manager")}catch(e){alert(`更新失敗：${e.message}`)}finally{el.disabled=false}};
+document.getElementById("refreshManagerRenewals").onclick=()=>loadCrm("manager");
 
 const trainingPlanDialog=document.getElementById("trainingPlanDialog"),trainingPlanContent=document.getElementById("trainingPlanContent");
 document.getElementById("closeTrainingPlanDialog").onclick=()=>trainingPlanDialog.close();

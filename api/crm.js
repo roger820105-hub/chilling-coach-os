@@ -26,7 +26,12 @@ module.exports=async function(req,res){
     const saved=await rows(c.url,c.headers,"notification_preferences?on_conflict=user_id",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify(value)});return res.json({preferences:saved[0]});
    }
    const id=String(b.id||""), status=String(b.status||"");
-   if(!id||!["pending","contacted","interested","confirmed","renewed","lost"].includes(status))return res.status(400).json({error:"Invalid follow-up"});
+   if(!["pending","contacted","interested","confirmed","renewed","lost"].includes(status))return res.status(400).json({error:"Invalid follow-up"});
+   if(!id&&b.studentId){
+    const studentId=String(b.studentId),packageId=String(b.packageId||"")||null;if(allowed&&!allowed.has(studentId))return res.status(403).json({error:"Student not assigned"});
+    const created=await rows(c.url,c.headers,"renewal_followups?on_conflict=student_id,package_id",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify({student_id:studentId,coach_id:String(b.coachId||c.user.id),package_id:packageId,status,probability:Number(b.probability||40),expected_amount:Number(b.expectedAmount||0),last_contact_at:status!=="pending"?new Date().toISOString():null,updated_at:new Date().toISOString()})});return res.json({followup:created[0]});
+   }
+   if(!id)return res.status(400).json({error:"Invalid follow-up"});
    const existing=(await rows(c.url,c.headers,`renewal_followups?id=eq.${id}&select=id,student_id`))[0];
    if(!existing)return res.status(404).json({error:"Follow-up not found"});
    if(allowed&&!allowed.has(existing.student_id))return res.status(403).json({error:"Student not assigned"});
@@ -63,7 +68,7 @@ module.exports=async function(req,res){
    if(!due)continue;
    let probability=40; if(Number(pkg.remaining_sessions)<=1)probability+=20;if(recent>=4)probability+=20;if(expiryDays!=null&&expiryDays<=14)probability+=10;probability=Math.min(90,probability);
    const existing=followups.find(x=>x.student_id===student.id&&x.package_id===pkg.id);
-   candidates.push({id:existing?.id||null,studentId:student.id,studentName:student.name,phone:student.phone,coachId,coachName:userMap[coachId]||"未指派",remaining:Number(pkg.remaining_sessions),expiresAt:day(pkg.expires_at),projectedFinish:projectedDays!=null?new Date(today.getTime()+projectedDays*86400000).toISOString().slice(0,10):null,probability:existing?.probability??probability,expectedAmount:Number(existing?.expected_amount||pkg.paid_amount||pkg.price||0),status:existing?.status||"pending",lastClass:completed[0]?.completed_at||completed[0]?.scheduled_at||null});
+   candidates.push({id:existing?.id||null,studentId:student.id,packageId:pkg.id,studentName:student.name,phone:student.phone,coachId,coachName:userMap[coachId]||"未指派",remaining:Number(pkg.remaining_sessions),expiresAt:day(pkg.expires_at),projectedFinish:projectedDays!=null?new Date(today.getTime()+projectedDays*86400000).toISOString().slice(0,10):null,probability:existing?.probability??probability,expectedAmount:Number(existing?.expected_amount||pkg.paid_amount||pkg.price||0),status:existing?.status||"pending",lastClass:completed[0]?.completed_at||completed[0]?.scheduled_at||null});
   }
   const coachIds=allowed?[c.user.id]:[...new Set(links.filter(x=>visibleIds.has(x.student_id)).map(x=>x.coach_id))];
   const coachPerformance=coachIds.map(coachId=>{

@@ -89,57 +89,38 @@
       </section>
 
       <section id="managerView" class="hidden">
-        <div class="hero">
-          <div>
-            <div class="muted">主管營運中心</div>
-            <h2>公司營運總覽</h2>
+        <div class="manager-tab-panel" data-manager-panel="overview">
+          <div class="hero"><div><div class="muted">主管營運中心</div><h2>公司營運總覽</h2></div><button class="primary" id="exportBtn">匯出月報</button></div>
+          <div class="kpis four">
+            <div class="card metric"><span>有效學員</span><strong id="crmStudents">—</strong><small>人</small></div><div class="card metric"><span>總剩餘堂數</span><strong id="crmRemaining">—</strong><small>堂</small></div><div class="card metric risk"><span>30天內需續約</span><strong id="crmRenewals">—</strong><small>人</small></div><div class="card metric"><span>預估續約營收</span><strong id="crmForecast">—</strong><small>NTD</small></div>
           </div>
-          <button class="primary" id="exportBtn">匯出月報</button>
+          <div class="card insight manager-insight"><div class="eyebrow">AI INSIGHT</div><h3>本月應優先處理</h3><p><b>學生管理與續約預測已啟用。</b></p><p id="crmInsight">正在整理優先名單。</p><div class="callout" id="messageUsage">LINE 主動訊息本月用量載入中…</div></div>
         </div>
 
-        <div class="kpis four">
-          <div class="card metric"><span>有效學員</span><strong id="crmStudents">—</strong><small>人</small></div>
-          <div class="card metric"><span>總剩餘堂數</span><strong id="crmRemaining">—</strong><small>堂</small></div>
-          <div class="card metric risk"><span>30天內需續約</span><strong id="crmRenewals">—</strong><small>人</small></div>
-          <div class="card metric"><span>預估續約營收</span><strong id="crmForecast">—</strong><small>NTD</small></div>
+        <div class="manager-tab-panel hidden" data-manager-panel="coaches">
+          <div class="hero"><div><div class="eyebrow">COACHES</div><h2>教練與權限</h2></div></div>
+          <div class="card approval-card"><div class="section-head compact"><div><div class="eyebrow">ACCESS APPROVAL</div><h3>待審核教練申請</h3></div><button class="secondary" id="refreshRoleRequests" type="button">重新整理</button></div><div id="roleRequestList" class="approval-list"><div class="load-state">正在載入申請…</div></div></div>
+          <div class="card approval-card"><div class="section-head compact"><div><div class="eyebrow">PERMISSIONS</div><h3>人員權限管理</h3></div><button class="secondary" id="refreshPermissionUsers" type="button">重新整理</button></div><p class="muted">可開啟或移除教練端與主管端權限。</p><div id="permissionUserList" class="permission-list"><div class="load-state">正在載入人員…</div></div></div>
+          <div class="card"><div class="section-head compact"><div><div class="eyebrow">PERFORMANCE</div><h3>教練績效總覽</h3></div></div><div class="table-wrap"><table><thead><tr><th>教練</th><th>學員</th><th>剩餘堂數</th><th>需續約</th><th>本月業績</th><th>預估營收</th></tr></thead><tbody id="coachPerformanceRows"><tr><td colspan="6">正在整理真實資料…</td></tr></tbody></table></div></div>
         </div>
 
-        <div class="card approval-card">
-          <div class="section-head compact"><div><div class="eyebrow">ACCESS APPROVAL</div><h3>待審核教練申請</h3></div><button class="secondary" id="refreshRoleRequests" type="button">重新整理</button></div>
-          <div id="roleRequestList" class="approval-list"><div class="load-state">正在載入申請…</div></div>
+        <div class="manager-tab-panel hidden" data-manager-panel="students">
+          <div class="hero"><div><div class="eyebrow">ALL STUDENTS</div><h2>全公司學員</h2><div class="muted">查看資料、修正方案或轉移負責教練。</div></div></div>
+          <input id="managerStudentSearch" class="text-input" type="search" placeholder="搜尋姓名或電話末四碼" /><div id="managerStudentLoadState" class="load-state">正在載入全公司學員…</div><div id="managerStudentList" class="student-grid"></div>
         </div>
 
-        <div class="card approval-card">
-          <div class="section-head compact"><div><div class="eyebrow">PERMISSIONS</div><h3>人員權限管理</h3></div><button class="secondary" id="refreshPermissionUsers" type="button">重新整理</button></div>
-          <p class="muted">可讓指定人員使用教練端或主管端。變更後，對方重新開啟 Mini App 即會生效。</p>
-          <div id="permissionUserList" class="permission-list"><div class="load-state">正在載入人員…</div></div>
+        <div class="manager-tab-panel hidden" data-manager-panel="renewals">
+          <div class="hero"><div><div class="eyebrow">RENEWALS</div><h2>續約追蹤</h2><div class="muted">更新聯絡進度與成交狀態。</div></div><button class="secondary" id="refreshManagerRenewals" type="button">重新整理</button></div>
+          <div id="managerRenewalList" class="renewal-manager-list"><div class="load-state">正在整理續約名單…</div></div>
         </div>
-
-        <div class="dashboard-grid">
-          <div class="card">
-            <div class="section-head compact"><div><div class="eyebrow">RENEWAL</div><h3>教練續約分析</h3></div></div>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>教練</th><th>學員</th><th>剩餘堂數</th><th>需續約</th><th>本月業績</th><th>預估營收</th></tr></thead>
-                <tbody id="coachPerformanceRows"><tr><td colspan="6">正在整理真實資料…</td></tr></tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="card insight">
-            <div class="eyebrow">AI INSIGHT</div>
-            <h3>本月應優先處理</h3>
-            <p><b>學生管理與續約預測已啟用。</b></p>
-            <p id="crmInsight">正在依剩餘堂數、到期日與近期上課狀況整理優先名單。</p>
-            <div class="callout" id="messageUsage">LINE 主動訊息本月用量載入中…</div>
-          </div>
-        </div>
-
       </section>
     </main>
 
     <nav class="bottom-nav" id="bottomNav">
       <button class="active" data-coach-tab="overview">總覽</button><button data-coach-tab="students">學員</button><button data-coach-tab="courses">課程</button><button data-coach-tab="data">數據</button>
+    </nav>
+    <nav class="bottom-nav hidden" id="managerBottomNav">
+      <button class="active" data-manager-tab="overview">總覽</button><button data-manager-tab="coaches">教練</button><button data-manager-tab="students">學員</button><button data-manager-tab="renewals">續約</button>
     </nav>
   </div>
 
