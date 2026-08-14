@@ -10,7 +10,7 @@
 
 員工差勤、打卡、請假、薪資、獎金與 Google 班表同步已退出產品範圍。
 
-部署前依序執行 `supabase/migrations/202608140001_student_crm.sql`，並設定 `CRON_SECRET` 與可選的 `LINE_MONTHLY_MESSAGE_LIMIT`（預設 200）。
+部署前執行 `supabase/migrations/202608140001_student_crm.sql`。LINE 推播引擎預設不排程；確認收件人、內容、時段與費用上限後，才設定 `CRON_SECRET`、`LINE_MONTHLY_MESSAGE_LIMIT` 並啟用排程。
 
 > V12 / 1.0 implementation is included as additive Supabase migrations, live Mini App APIs, and a permission-scoped data Copilot. Deployment instructions: `docs/DEPLOY_V12.md`. Company/Google Sheets mapping contract: `docs/INTEGRATIONS.md`.
 

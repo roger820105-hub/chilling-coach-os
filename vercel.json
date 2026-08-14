@@ -53,6 +53,5 @@
       "source": "/api/reminders",
       "destination": "/api/reminders.js"
     }
-  ],
-  "crons": [{"path":"/api/reminders","schedule":"0 0 * * *"}]
+  ]
 }
