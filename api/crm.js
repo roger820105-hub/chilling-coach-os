@@ -12,6 +12,7 @@ async function permittedStudentIds(c){
 
 module.exports=async function(req,res){
  try{
+  if(req.query?.cron==="daily")return require("../lib/reminders")(req,res);
   const c=await context(req,["coach","manager","admin"]), allowed=await permittedStudentIds(c);
   if(req.method==="POST"){
    const b=req.body||{}, id=String(b.id||""), status=String(b.status||"");
