@@ -44,10 +44,6 @@
     {
       "source": "/api/crm",
       "destination": "/api/crm.js"
-    },
-    {
-      "source": "/api/reminders",
-      "destination": "/api/reminders.js"
     }
   ]
 }
