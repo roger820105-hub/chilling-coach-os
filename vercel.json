@@ -42,10 +42,6 @@
       "destination": "/api/training-plans.js"
     },
     {
-      "source": "/api/operations",
-      "destination": "/api/operations.js"
-    },
-    {
       "source": "/api/crm",
       "destination": "/api/crm.js"
     },

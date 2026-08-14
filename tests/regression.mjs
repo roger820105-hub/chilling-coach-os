@@ -7,7 +7,6 @@ const access=fs.readFileSync(new URL("../supabase/migrations/202608130001_role_r
 const health=fs.readFileSync(new URL("../api/student-health.js",import.meta.url),"utf8");
 const plans=fs.readFileSync(new URL("../api/training-plans.js",import.meta.url),"utf8");
 const atomicTemplate=fs.readFileSync(new URL("../supabase/migrations/202608130003_atomic_training_template.sql",import.meta.url),"utf8");
-const operations=fs.readFileSync(new URL("../api/operations.js",import.meta.url),"utf8");
 const leaveReview=fs.readFileSync(new URL("../supabase/migrations/202608130004_operations_leave_review.sql",import.meta.url),"utf8");
 const html=fs.readFileSync(new URL("../index.html",import.meta.url),"utf8");
 const staffClock=fs.readFileSync(new URL("../supabase/migrations/202608130005_staff_clock_safety.sql",import.meta.url),"utf8");
@@ -26,7 +25,6 @@ assert.ok(access.includes("students_normalized_phone_uidx"));
 for(const entity of ["body_measurements","student_assessments","student_goals","write_audit_log"])assert.ok(health.includes(entity));
 for(const entity of ["student_training_plans","planned_workouts","create_training_template"])assert.ok(plans.includes(entity));
 for(const entity of ["training_templates","training_template_items","exercise_library"])assert.ok(atomicTemplate.includes(entity));
-for(const entity of ["sales_records","group_classes","work_logs","leave_requests","accounting_exports","integration_adapters"])assert.ok(operations.includes(entity));
 for(const entity of ["review_leave_request","approval_logs","write_audit_log"])assert.ok(leaveReview.includes(entity));
 for(const demo of ["PT 學員</span><strong>143","預估續約率</span><strong>71%","<b>6 位</b> 高流失風險","<b>11 位</b>","<b>21 位</b>"])assert.ok(!html.includes(demo),`Demo metric must not ship: ${demo}`);
 for(const entity of ["work_logs_one_open_per_user_uidx","record_work_clock","write_audit_log"])assert.ok(staffClock.includes(entity));
